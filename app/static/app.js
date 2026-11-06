@@ -1,14 +1,63 @@
 /**
  * NVDA Quantitative Multi-Factor Tracker & Self-Tuning Price Simulator
- * Frontend Controller & High-DPI Financial Canvas Renderer
+ * Moomoo / TradingView Interactive Candlestick + Real MAVOL + Entry Points Renderer
  */
 
 const state = {
   payload: null,
-  calibrationChartMode: 'actual_vs_pred', // 'actual_vs_pred' | 'weight_evolution'
+  timeframe: '1D',
+  candlesByTf: {},
+  visibleCount: 110,
+  panOffset: 0, // 0 = anchored at latest right-most bar; >0 = panned left into history
+  isDragging: false,
+  dragStartX: 0,
+  dragStartPan: 0,
+  hoverIndex: null,
+  hoverX: null,
+  hoverY: null,
+  showEntryZones: true,
+  showForecastCone: true,
+  calibrationChartMode: 'actual_vs_pred',
   live1sEnabled: true,
-  tickCounter: 0,
 };
+
+function fmtPrice(v, decimals = 2) {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return '--';
+  return '$' + Number(v).toFixed(decimals);
+}
+
+function fmtNum(v, decimals = 3) {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return '--';
+  return Number(v).toFixed(decimals);
+}
+
+function fmtPct(v, showPlus = true) {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return '--';
+  const num = Number(v);
+  const sign = showPlus && num > 0 ? '+' : '';
+  return `${sign}${num.toFixed(2)}%`;
+}
+
+function fmtVolM(volShares) {
+  if (volShares === null || volShares === undefined || Number.isNaN(Number(volShares))) return '--';
+  const m = Number(volShares) / 1e6;
+  if (m >= 1.0) return `${m.toFixed(3)}M`;
+  const k = Number(volShares) / 1e3;
+  return `${k.toFixed(1)}K`;
+}
+
+function deltaClass(v) {
+  const num = Number(v);
+  if (num > 0.02) return 'delta-up';
+  if (num < -0.02) return 'delta-down';
+  return 'delta-flat';
+}
+
+function setDeltaBadge(el, pctVal, customText = null) {
+  if (!el) return;
+  el.className = `spot-delta mono ${deltaClass(pctVal)}`;
+  el.textContent = customText !== null ? customText : fmtPct(pctVal);
+}
 
 async function pollLiveTickEverySecond() {
   if (!state.live1sEnabled) return;
@@ -19,7 +68,8 @@ async function pollLiveTickEverySecond() {
 
     const priceEl = document.getElementById('live-spot-price');
     if (priceEl) {
-      priceEl.textContent = fmtPrice(tick.price);
+      const arrow = tick.tick_direction > 0 ? ' ▲' : tick.tick_direction < 0 ? ' ▼' : '';
+      priceEl.textContent = `$${Number(tick.price).toFixed(3)}${arrow}`;
       if (tick.tick_direction > 0) {
         priceEl.style.color = 'var(--bull-primary)';
       } else if (tick.tick_direction < 0) {
@@ -30,61 +80,43 @@ async function pollLiveTickEverySecond() {
       }, 450);
     }
 
-    setDeltaBadge(document.getElementById('live-spot-delta'), tick.extended_change_pct);
-    const clockEl = document.getElementById('live-tick-clock');
-    if (clockEl && tick.timestamp_et) {
-      clockEl.textContent = tick.timestamp_et.slice(11);
+    const chgD = Number(tick.change_dollars || 0);
+    const chgP = Number(tick.extended_change_pct || 0);
+    const dSign = chgD >= 0 ? '+' : '';
+    setDeltaBadge(
+      document.getElementById('live-spot-delta'),
+      chgP,
+      `${dSign}${chgD.toFixed(3)} (${fmtPct(chgP)})`
+    );
+
+    const setTxt = (id, txt) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = txt;
+    };
+    setTxt('hdr-day-high', fmtNum(tick.day_high, 3));
+    setTxt('hdr-day-low', fmtNum(tick.day_low, 3));
+    setTxt('hdr-day-open', fmtNum(tick.day_open, 3));
+    setTxt('last-reg-close-val', fmtNum(tick.last_regular_close, 3));
+    setTxt('hdr-real-volume', `${Number(tick.volume_m || 0).toFixed(2)}M`);
+    if (tick.timestamp_et) {
+      setTxt('live-tick-clock', tick.timestamp_et.slice(11));
     }
 
-    if (state.payload && state.payload.market) {
-      state.payload.market.current_price = tick.price;
-      state.payload.market.extended_change_pct = tick.extended_change_pct;
-      const sim = state.payload.simulation;
-      if (sim && sim.live_vs_simulated) {
-        const simTarget = sim.live_vs_simulated.active_simulated_price;
-        const spreadPct = ((simTarget - tick.price) / tick.price) * 100.0;
-        const simSpreadEl = document.getElementById('live-vs-sim-badge');
-        if (simSpreadEl) {
-          simSpreadEl.textContent = `${fmtPrice(simTarget)} (${fmtPct(spreadPct)})`;
-        }
+    // Update latest candle in active timeframe so live candle dances in real time
+    const activeCandles = state.candlesByTf[state.timeframe];
+    if (activeCandles && activeCandles.length > 0) {
+      const lastC = activeCandles[activeCandles.length - 1];
+      lastC.close = tick.price;
+      if (tick.price > lastC.high) lastC.high = tick.price;
+      if (tick.price < lastC.low) lastC.low = tick.price;
+      if (state.timeframe === '1D' && tick.volume > 0) {
+        lastC.volume = tick.volume;
       }
-      if (sim && sim.entry_recommendations) {
-        const optP = sim.entry_recommendations.most_suitable_entry.entry_price;
-        const safeP = sim.entry_recommendations.safest_entry.entry_price;
-        const optDiscEl = document.getElementById('opt-discount-pct');
-        const safeDiscEl = document.getElementById('safe-discount-pct');
-        if (optDiscEl) optDiscEl.textContent = `${fmtPct(((optP - tick.price) / tick.price) * 100)} vs Spot`;
-        if (safeDiscEl) safeDiscEl.textContent = `${fmtPct(((safeP - tick.price) / tick.price) * 100)} vs Spot`;
-      }
+      drawInteractiveMoomooChart();
     }
   } catch (e) {
-    // Ignore transient 1s tick errors
+    // Ignore transient network hiccups
   }
-}
-
-function fmtPrice(v) {
-  if (v === null || v === undefined || Number.isNaN(Number(v))) return '--';
-  return '$' + Number(v).toFixed(2);
-}
-
-function fmtPct(v, showPlus = true) {
-  if (v === null || v === undefined || Number.isNaN(Number(v))) return '--';
-  const num = Number(v);
-  const sign = showPlus && num > 0 ? '+' : '';
-  return `${sign}${num.toFixed(2)}%`;
-}
-
-function deltaClass(v) {
-  const num = Number(v);
-  if (num > 0.05) return 'delta-up';
-  if (num < -0.05) return 'delta-down';
-  return 'delta-flat';
-}
-
-function setDeltaBadge(el, pctVal, customText = null) {
-  if (!el) return;
-  el.className = `spot-delta mono ${deltaClass(pctVal)}`;
-  el.textContent = customText !== null ? customText : fmtPct(pctVal);
 }
 
 async function fetchDashboard(forceRefresh = false) {
@@ -94,11 +126,32 @@ async function fetchDashboard(forceRefresh = false) {
     const res = await fetch(`/api/dashboard?refresh=${forceRefresh ? 'true' : 'false'}`);
     const data = await res.json();
     state.payload = data;
+    if (data.chart_candles && data.chart_candles.candles) {
+      state.candlesByTf['1D'] = data.chart_candles.candles;
+    }
+    if (state.timeframe !== '1D' && !state.candlesByTf[state.timeframe]) {
+      await fetchTimeframeCandles(state.timeframe, forceRefresh);
+    }
     renderAll(data);
   } catch (err) {
     console.error('Failed to load dashboard:', err);
   } finally {
-    if (btn) btn.textContent = 'Refresh Live Feed';
+    if (btn) btn.textContent = 'Refresh Feed';
+  }
+}
+
+async function fetchTimeframeCandles(tf, forceRefresh = false) {
+  try {
+    const res = await fetch(`/api/candles?timeframe=${encodeURIComponent(tf)}&limit=240&refresh=${forceRefresh ? 'true' : 'false'}`);
+    const data = await res.json();
+    if (data && data.candles) {
+      state.candlesByTf[tf] = data.candles;
+      state.panOffset = 0;
+      state.hoverIndex = null;
+      drawInteractiveMoomooChart();
+    }
+  } catch (err) {
+    console.error('Failed to fetch timeframe candles:', err);
   }
 }
 
@@ -125,6 +178,9 @@ async function runWhatIfScenario() {
     });
     const data = await res.json();
     state.payload = data;
+    if (data.chart_candles && data.chart_candles.candles && !state.candlesByTf['1D']) {
+      state.candlesByTf['1D'] = data.chart_candles.candles;
+    }
     renderAll(data);
   } catch (err) {
     console.error('Failed to run What-If simulation:', err);
@@ -135,7 +191,7 @@ async function runWhatIfScenario() {
 
 async function triggerFineTuning() {
   const btn = document.getElementById('btn-fine-tune');
-  if (btn) btn.textContent = 'Calibrating Weights...';
+  if (btn) btn.textContent = 'Calibrating...';
   try {
     const res = await fetch('/api/calibrate', {
       method: 'POST',
@@ -150,7 +206,7 @@ async function triggerFineTuning() {
   } catch (err) {
     console.error('Calibration error:', err);
   } finally {
-    if (btn) btn.textContent = 'Fine-Tune Algorithm (Learn from Error)';
+    if (btn) btn.textContent = 'Fine-Tune Algorithm';
   }
 }
 
@@ -162,22 +218,22 @@ function renderAll(data) {
   const cal = data.calibration;
   const whale = data.whale_activity;
 
-  // 1. Top Header
-  document.getElementById('live-spot-price').textContent = fmtPrice(mkt.current_price);
-  setDeltaBadge(document.getElementById('live-spot-delta'), mkt.extended_change_pct);
+  // 1. Moomoo-Grade Top Quote Header
+  document.getElementById('live-spot-price').textContent = `$${Number(mkt.current_price).toFixed(3)}`;
+  const chgD = Number(mkt.change_dollars !== undefined ? mkt.change_dollars : mkt.current_price - mkt.prev_regular_close);
+  const dSign = chgD >= 0 ? '+' : '';
+  setDeltaBadge(
+    document.getElementById('live-spot-delta'),
+    mkt.regular_change_pct,
+    `${dSign}${chgD.toFixed(3)} (${fmtPct(mkt.regular_change_pct)})`
+  );
   document.getElementById('active-session-badge').textContent = mkt.active_session;
-  document.getElementById('last-reg-close-val').textContent = fmtPrice(mkt.last_regular_close);
-  document.getElementById('intraday-vwap-val').textContent = fmtPrice(mkt.vwap_intraday);
-
-  const comp = sim.live_vs_simulated;
-  const simSpreadEl = document.getElementById('live-vs-sim-badge');
-  simSpreadEl.textContent = `${fmtPrice(comp.active_simulated_price)} (${fmtPct(comp.implied_upside_pct)})`;
-  simSpreadEl.style.color =
-    comp.implied_upside_pct > 0.15
-      ? 'var(--bull-primary)'
-      : comp.implied_upside_pct < -0.15
-      ? 'var(--bear-primary)'
-      : 'var(--text-primary)';
+  document.getElementById('hdr-day-high').textContent = fmtNum(mkt.day_high, 3);
+  document.getElementById('hdr-day-low').textContent = fmtNum(mkt.day_low, 3);
+  document.getElementById('hdr-day-open').textContent = fmtNum(mkt.day_open, 3);
+  document.getElementById('last-reg-close-val').textContent = fmtNum(mkt.prev_regular_close, 3);
+  document.getElementById('hdr-real-volume').textContent = `${Number(mkt.volume_m || mkt.latest_daily_volume / 1e6).toFixed(2)}M`;
+  document.getElementById('intraday-vwap-val').textContent = fmtNum(mkt.vwap_intraday, 3);
 
   // Scenario banner
   const banner = document.getElementById('scenario-status-banner');
@@ -202,7 +258,7 @@ function renderAll(data) {
   document.getElementById('week-regime-label').textContent = wk.trend_regime;
   document.getElementById('weekly-trend-badge').textContent = wk.trend_regime;
 
-  // 3. 5-Day Cards below Fan Chart
+  // 3. 5-Day Cards below Chart
   const dayCardsContainer = document.getElementById('five-day-cards-container');
   dayCardsContainer.innerHTML = '';
   (wk.daily_cards || []).forEach((dc) => {
@@ -257,6 +313,13 @@ function renderAll(data) {
   document.getElementById('safe-exp-gain').textContent = fmtPct(safe.expected_gain_pct);
   document.getElementById('safe-max-risk').textContent = `-${safe.max_drawdown_risk_pct.toFixed(2)}%`;
   document.getElementById('safe-rationale').textContent = safe.rationale;
+
+  document.getElementById('insp-opt-entry').textContent = fmtPrice(opt.entry_price);
+  document.getElementById('insp-safe-entry').textContent = fmtPrice(safe.entry_price);
+  document.getElementById('legend-opt-p').textContent = fmtPrice(opt.entry_price);
+  document.getElementById('legend-safe-p').textContent = fmtPrice(safe.entry_price);
+  document.getElementById('legend-tp1-p').textContent = fmtPrice(opt.primary_target_price);
+  document.getElementById('legend-stop-p').textContent = fmtPrice(opt.stop_loss_price);
 
   document.getElementById('blended-entry-summary').textContent =
     `Blended Avg: ${fmtPrice(plan.blended_average_entry)} (${fmtPct(plan.blended_upside_to_primary_pct)} to Target)`;
@@ -360,7 +423,7 @@ function renderAll(data) {
   document.getElementById('cal-latest-notes').textContent = cs.notes || '';
 
   // 8. Draw Charts
-  drawWeeklyFanChart(sim.one_week_forecast.timeline, entries);
+  drawInteractiveMoomooChart();
   drawCalibrationOrComparisonChart(sim.live_vs_simulated.historical_comparison_series, cal.history);
 }
 
@@ -376,11 +439,22 @@ function renderHorizonCard(prefix, h) {
 }
 
 /**
- * High-DPI Canvas Renderer for 1-Week Trajectory Fan Chart + Entry & Stop Levels
+ * Moomoo / TradingView Interactive Candlestick + Real Market Volume (MAVOL) + Entry Points Canvas
  */
-function drawWeeklyFanChart(timeline, entries) {
+function drawInteractiveMoomooChart() {
   const canvas = document.getElementById('canvas-weekly-fan');
-  if (!canvas || !timeline || timeline.length === 0) return;
+  if (!canvas || !state.payload) return;
+
+  const candles = state.candlesByTf[state.timeframe] || [];
+  if (candles.length === 0) return;
+
+  const sim = state.payload.simulation;
+  const entries = sim.entry_recommendations;
+  const optPrice = entries.most_suitable_entry.entry_price;
+  const safePrice = entries.safest_entry.entry_price;
+  const stopPrice = entries.most_suitable_entry.stop_loss_price;
+  const tp1Price = entries.most_suitable_entry.primary_target_price;
+  const spotPrice = state.payload.market.current_price;
 
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
@@ -391,126 +465,318 @@ function drawWeeklyFanChart(timeline, entries) {
 
   const W = rect.width;
   const H = rect.height;
-  const pad = { top: 22, right: 94, bottom: 34, left: 54 };
-  const plotW = W - pad.left - pad.right;
-  const plotH = H - pad.top - pad.bottom;
+
+  // Split layout: Top 68% Candlestick + Overlays, Bottom 26% Real Volume + MAVOL(5/10/20)
+  const padLeft = 52;
+  const padRight = 98;
+  const priceTop = 18;
+  const priceBottom = Math.floor(H * 0.67);
+  const volTop = Math.floor(H * 0.72);
+  const volBottom = H - 24;
+  const plotW = W - padLeft - padRight;
+  const priceH = priceBottom - priceTop;
+  const volH = volBottom - volTop;
 
   ctx.clearRect(0, 0, W, H);
 
-  const optPrice = entries.most_suitable_entry.entry_price;
-  const safePrice = entries.safest_entry.entry_price;
-  const stopPrice = entries.most_suitable_entry.stop_loss_price;
-  const targetPrice = entries.most_suitable_entry.primary_target_price;
+  // Determine slice of visible candles based on zoom (visibleCount) & pan (panOffset)
+  const total = candles.length;
+  const visCount = Math.max(20, Math.min(total, state.visibleCount));
+  const maxPan = Math.max(0, total - visCount);
+  state.panOffset = Math.max(0, Math.min(maxPan, state.panOffset));
 
-  const allVals = [];
-  timeline.forEach((pt) => {
-    allVals.push(pt.low_90, pt.high_90, pt.median);
+  const endIdx = total - state.panOffset;
+  const startIdx = Math.max(0, endIdx - visCount);
+  const slice = candles.slice(startIdx, endIdx);
+
+  // Reserve 5 future slots on the right when panOffset == 0 and showForecastCone is true
+  const dailyCards = (sim.one_week_forecast && sim.one_week_forecast.daily_cards) || [];
+  const futureSlots = (state.panOffset === 0 && state.showForecastCone) ? dailyCards.length : 0;
+  const totalSlots = slice.length + futureSlots;
+  const stepX = plotW / Math.max(totalSlots, 1);
+  const candleW = Math.max(2, Math.min(14, stepX * 0.68));
+
+  // Compute Y-axis price bounds
+  let minP = Infinity;
+  let maxP = -Infinity;
+  let maxVol = 1;
+  let highestIdx = 0;
+  let lowestIdx = 0;
+
+  slice.forEach((c, i) => {
+    if (c.high > maxP) { maxP = c.high; highestIdx = i; }
+    if (c.low < minP) { minP = c.low; lowestIdx = i; }
+    if (c.volume > maxVol) maxVol = c.volume;
+    if (c.mavol5 > maxVol) maxVol = c.mavol5;
   });
-  allVals.push(optPrice, safePrice, stopPrice, targetPrice);
 
-  const minP = Math.min(...allVals) * 0.992;
-  const maxP = Math.max(...allVals) * 1.008;
+  if (state.showEntryZones && state.panOffset === 0) {
+    minP = Math.min(minP, safePrice * 0.992, stopPrice * 0.992);
+    maxP = Math.max(maxP, tp1Price * 1.006);
+  }
+  if (futureSlots > 0) {
+    dailyCards.forEach((dc) => {
+      minP = Math.min(minP, dc.expected_low_68);
+      maxP = Math.max(maxP, dc.expected_high_68);
+    });
+  }
 
-  const xOf = (idx) => pad.left + (idx / Math.max(timeline.length - 1, 1)) * plotW;
-  const yOf = (val) => pad.top + ((maxP - val) / Math.max(maxP - minP, 1)) * plotH;
+  const pSpan = Math.max(maxP - minP, 1.0);
+  minP -= pSpan * 0.05;
+  maxP += pSpan * 0.06;
 
-  // Horizontal price grid lines
-  const gridSteps = 5;
-  ctx.strokeStyle = 'hsla(215, 15%, 22%, 0.55)';
+  const xOfSlot = (slotIdx) => padLeft + (slotIdx + 0.5) * stepX;
+  const yOfPrice = (p) => priceTop + ((maxP - p) / (maxP - minP)) * priceH;
+  const yOfVol = (v) => volBottom - (Math.min(v, maxVol) / maxVol) * volH;
+
+  // 1. Price Grid & Left/Right Price Labels (like Moomoo)
+  ctx.strokeStyle = 'hsla(215, 15%, 22%, 0.45)';
   ctx.lineWidth = 1;
-  ctx.font = '11px "JetBrains Mono", monospace';
+  ctx.font = '10.5px "JetBrains Mono", monospace';
   ctx.fillStyle = 'hsl(215, 12%, 55%)';
-  for (let i = 0; i <= gridSteps; i++) {
-    const val = minP + (i / gridSteps) * (maxP - minP);
-    const y = yOf(val);
+  const prevRegClose = state.payload.market.prev_regular_close || 181.6;
+  for (let g = 0; g <= 4; g++) {
+    const val = minP + (g / 4) * (maxP - minP);
+    const y = yOfPrice(val);
     ctx.beginPath();
-    ctx.moveTo(pad.left, y);
-    ctx.lineTo(W - pad.right, y);
+    ctx.moveTo(padLeft, y);
+    ctx.lineTo(W - padRight, y);
     ctx.stroke();
-    ctx.fillText(`$${val.toFixed(0)}`, 8, y + 4);
+    ctx.fillText(val.toFixed(1), 6, y + 3);
   }
 
-  // 90% Outer Confidence Band
+  // Divider between Price Pane and MAVOL Pane
+  ctx.strokeStyle = 'hsla(215, 15%, 26%, 0.8)';
   ctx.beginPath();
-  timeline.forEach((pt, idx) => {
-    const x = xOf(idx);
-    const y = yOf(pt.high_90);
-    if (idx === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  for (let idx = timeline.length - 1; idx >= 0; idx--) {
-    ctx.lineTo(xOf(idx), yOf(timeline[idx].low_90));
-  }
-  ctx.closePath();
-  ctx.fillStyle = 'hsla(158, 78%, 42%, 0.08)';
-  ctx.fill();
-
-  // 68% Inner Confidence Band
-  ctx.beginPath();
-  timeline.forEach((pt, idx) => {
-    const x = xOf(idx);
-    const y = yOf(pt.high_68);
-    if (idx === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  for (let idx = timeline.length - 1; idx >= 0; idx--) {
-    ctx.lineTo(xOf(idx), yOf(timeline[idx].low_68));
-  }
-  ctx.closePath();
-  ctx.fillStyle = 'hsla(158, 78%, 42%, 0.19)';
-  ctx.fill();
-
-  // Horizontal Reference Lines: Target, Optimal Entry, Safe Entry, Stop-Loss
-  const drawHorizontalLevel = (price, color, label, dashed = true) => {
-    const y = yOf(price);
-    if (y < pad.top || y > H - pad.bottom) return;
-    ctx.save();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.3;
-    if (dashed) ctx.setLineDash([5, 4]);
-    ctx.beginPath();
-    ctx.moveTo(pad.left, y);
-    ctx.lineTo(W - pad.right, y);
-    ctx.stroke();
-    ctx.fillStyle = color;
-    ctx.font = '600 10.5px "JetBrains Mono", monospace';
-    ctx.fillText(`${label} $${price.toFixed(2)}`, W - pad.right + 6, y + 3);
-    ctx.restore();
-  };
-
-  drawHorizontalLevel(targetPrice, 'hsl(158, 78%, 48%)', 'TP1');
-  drawHorizontalLevel(optPrice, 'hsl(38, 92%, 54%)', 'OPT');
-  drawHorizontalLevel(safePrice, 'hsl(196, 86%, 54%)', 'SAFE');
-  drawHorizontalLevel(stopPrice, 'hsl(350, 82%, 58%)', 'STOP');
-
-  // Simulated Median Trajectory Line
-  ctx.beginPath();
-  timeline.forEach((pt, idx) => {
-    const x = xOf(idx);
-    const y = yOf(pt.median);
-    if (idx === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  });
-  ctx.strokeStyle = 'hsl(158, 78%, 45%)';
-  ctx.lineWidth = 2.4;
+  ctx.moveTo(padLeft, volTop - 8);
+  ctx.lineTo(W - padRight, volTop - 8);
   ctx.stroke();
+  ctx.fillStyle = 'hsl(215, 12%, 55%)';
+  ctx.fillText(fmtVolM(maxVol), 4, volTop + 8);
 
-  // Data Nodes & X-Axis Labels
-  timeline.forEach((pt, idx) => {
-    const x = xOf(idx);
-    const y = yOf(pt.median);
+  // 2. Draw Predicted Entry Zones & Target Overlays (OPT, SAFE, TP1, STOP)
+  if (state.showEntryZones) {
+    const drawZoneLevel = (price, color, fillRgba, tag) => {
+      const y = yOfPrice(price);
+      if (y < priceTop || y > priceBottom) return;
+      ctx.save();
+      if (fillRgba) {
+        ctx.fillStyle = fillRgba;
+        ctx.fillRect(padLeft, y - 5, plotW, 10);
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.25;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(W - padRight, y);
+      ctx.stroke();
+
+      // Right-axis pill
+      ctx.fillStyle = color;
+      ctx.font = '600 10px "JetBrains Mono", monospace';
+      ctx.fillText(`${tag} $${price.toFixed(2)}`, W - padRight + 5, y + 3);
+      ctx.restore();
+    };
+
+    drawZoneLevel(tp1Price, 'hsl(158, 78%, 46%)', null, 'TP1');
+    drawZoneLevel(optPrice, 'hsl(38, 92%, 54%)', 'hsla(38, 92%, 54%, 0.08)', '★ OPT');
+    drawZoneLevel(safePrice, 'hsl(196, 86%, 54%)', 'hsla(196, 86%, 54%, 0.08)', '◆ SAFE');
+    drawZoneLevel(stopPrice, 'hsl(350, 82%, 58%)', null, 'STOP');
+  }
+
+  // Current Spot Price Dotted Line (Moomoo orange dashed line)
+  const ySpot = yOfPrice(spotPrice);
+  if (ySpot >= priceTop && ySpot <= priceBottom) {
+    ctx.save();
+    ctx.strokeStyle = 'hsla(28, 95%, 58%, 0.75)';
+    ctx.setLineDash([2, 3]);
     ctx.beginPath();
-    ctx.arc(x, y, 3.2, 0, Math.PI * 2);
-    ctx.fillStyle = idx === 0 ? 'hsl(210, 22%, 95%)' : 'hsl(158, 78%, 45%)';
-    ctx.fill();
+    ctx.moveTo(padLeft, ySpot);
+    ctx.lineTo(W - padRight, ySpot);
+    ctx.stroke();
+    ctx.fillStyle = 'hsl(28, 95%, 58%)';
+    ctx.font = '700 10px "JetBrains Mono", monospace';
+    ctx.fillText(`SPOT $${spotPrice.toFixed(2)}`, W - padRight + 5, ySpot + 3);
+    ctx.restore();
+  }
 
-    if (idx === 0 || idx % 2 === 0) {
-      ctx.fillStyle = 'hsl(214, 14%, 68%)';
-      ctx.font = '10.5px "JetBrains Mono", monospace';
-      const shortLbl = idx === 0 ? 'Spot' : `D${idx / 2} Close`;
-      ctx.fillText(shortLbl, x - 18, H - 10);
+  // 3. Draw Candlesticks & Real Volume Histogram
+  slice.forEach((c, i) => {
+    const x = xOfSlot(i);
+    const isBull = c.close >= c.open;
+    const color = isBull ? 'hsl(158, 78%, 43%)' : 'hsl(350, 82%, 58%)';
+
+    // High-Low Wick
+    const yH = yOfPrice(c.high);
+    const yL = yOfPrice(c.low);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(x, yH);
+    ctx.lineTo(x, yL);
+    ctx.stroke();
+
+    // Open-Close Body
+    const yO = yOfPrice(c.open);
+    const yC = yOfPrice(c.close);
+    const bodyTop = Math.min(yO, yC);
+    const bodyH = Math.max(1.5, Math.abs(yC - yO));
+    ctx.fillStyle = color;
+    ctx.fillRect(x - candleW / 2, bodyTop, candleW, bodyH);
+
+    // Volume Bar in bottom pane
+    const yV = yOfVol(c.volume);
+    ctx.fillStyle = isBull ? 'hsla(158, 78%, 43%, 0.75)' : 'hsla(350, 82%, 58%, 0.75)';
+    ctx.fillRect(x - candleW / 2, yV, candleW, Math.max(1, volBottom - yV));
+
+    // X-Axis Date/Time Labels
+    const labelInterval = Math.max(1, Math.floor(slice.length / 6));
+    if (i % labelInterval === 0 || i === slice.length - 1) {
+      ctx.fillStyle = 'hsl(214, 14%, 64%)';
+      ctx.font = '10px "JetBrains Mono", monospace';
+      const lbl = c.label.length > 10 ? c.label.slice(5) : c.label;
+      ctx.fillText(lbl, x - 18, H - 7);
     }
   });
+
+  // 4. Draw Price Moving Averages (MA5 Amber, MA20 Cyan, MA50 Pink)
+  const drawPriceMA = (key, color) => {
+    ctx.beginPath();
+    slice.forEach((c, i) => {
+      const x = xOfSlot(i);
+      const y = yOfPrice(c[key]);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+  };
+  drawPriceMA('ma5', 'hsl(38, 92%, 54%)');
+  drawPriceMA('ma20', 'hsl(196, 86%, 54%)');
+  drawPriceMA('ma50', 'hsl(320, 75%, 62%)');
+
+  // 5. Draw Volume Moving Averages (MAVOL5 Amber, MAVOL10 Cyan, MAVOL20 Pink)
+  const drawVolMA = (key, color) => {
+    ctx.beginPath();
+    slice.forEach((c, i) => {
+      const x = xOfSlot(i);
+      const y = yOfVol(c[key]);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.25;
+    ctx.stroke();
+  };
+  drawVolMA('mavol5', 'hsl(38, 92%, 54%)');
+  drawVolMA('mavol10', 'hsl(196, 86%, 54%)');
+  drawVolMA('mavol20', 'hsl(320, 75%, 62%)');
+
+  // 6. Moomoo-Style Peak & Trough Price Callouts on Candlesticks
+  if (slice.length > 5) {
+    const hiC = slice[highestIdx];
+    const loC = slice[lowestIdx];
+    ctx.fillStyle = 'hsl(210, 22%, 96%)';
+    ctx.font = '600 10.5px "JetBrains Mono", monospace';
+    const xHi = xOfSlot(highestIdx);
+    const yHi = yOfPrice(hiC.high);
+    ctx.fillText(`← ${hiC.high.toFixed(3)}`, Math.min(xHi + 4, W - padRight - 65), Math.max(priceTop + 10, yHi));
+
+    const xLo = xOfSlot(lowestIdx);
+    const yLo = yOfPrice(loC.low);
+    ctx.fillText(`← ${loC.low.toFixed(3)}`, Math.min(xLo + 4, W - padRight - 65), Math.min(priceBottom - 4, yLo + 10));
+  }
+
+  // 7. Draw 1-Week (5-Trading-Day) Forward Forecast Cone to the Right of Latest Candle
+  if (futureSlots > 0 && slice.length > 0) {
+    const lastIdx = slice.length - 1;
+    const lastX = xOfSlot(lastIdx);
+    const lastY = yOfPrice(slice[lastIdx].close);
+
+    // 68% Band Polygon
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    dailyCards.forEach((dc, k) => {
+      ctx.lineTo(xOfSlot(slice.length + k), yOfPrice(dc.expected_high_68));
+    });
+    for (let k = dailyCards.length - 1; k >= 0; k--) {
+      ctx.lineTo(xOfSlot(slice.length + k), yOfPrice(dailyCards[k].expected_low_68));
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'hsla(158, 78%, 45%, 0.16)';
+    ctx.fill();
+
+    // Predicted Median Line
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    dailyCards.forEach((dc, k) => {
+      ctx.lineTo(xOfSlot(slice.length + k), yOfPrice(dc.predicted_close));
+    });
+    ctx.strokeStyle = 'hsl(158, 78%, 48%)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.stroke();
+    ctx.restore();
+
+    dailyCards.forEach((dc, k) => {
+      const fx = xOfSlot(slice.length + k);
+      const fy = yOfPrice(dc.predicted_close);
+      ctx.beginPath();
+      ctx.arc(fx, fy, 2.8, 0, Math.PI * 2);
+      ctx.fillStyle = 'hsl(158, 78%, 48%)';
+      ctx.fill();
+    });
+  }
+
+  // 8. Interactive Crosshair & Live Inspector Bar Update
+  let inspectedCandle = slice[slice.length - 1];
+  if (state.hoverIndex !== null && state.hoverIndex >= 0 && state.hoverIndex < slice.length) {
+    inspectedCandle = slice[state.hoverIndex];
+    const cx = xOfSlot(state.hoverIndex);
+
+    ctx.save();
+    ctx.strokeStyle = 'hsla(210, 20%, 85%, 0.55)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(cx, priceTop);
+    ctx.lineTo(cx, volBottom);
+    ctx.stroke();
+
+    if (state.hoverY !== null && state.hoverY >= priceTop && state.hoverY <= priceBottom) {
+      ctx.beginPath();
+      ctx.moveTo(padLeft, state.hoverY);
+      ctx.lineTo(W - padRight, state.hoverY);
+      ctx.stroke();
+
+      const hoveredPrice = maxP - ((state.hoverY - priceTop) / priceH) * (maxP - minP);
+      ctx.fillStyle = 'hsl(215, 22%, 18%)';
+      ctx.fillRect(W - padRight + 2, state.hoverY - 9, 64, 18);
+      ctx.fillStyle = 'hsl(210, 22%, 96%)';
+      ctx.font = '600 10px "JetBrains Mono", monospace';
+      ctx.fillText(`$${hoveredPrice.toFixed(2)}`, W - padRight + 6, state.hoverY + 3);
+    }
+    ctx.restore();
+  }
+
+  if (inspectedCandle) {
+    document.getElementById('insp-date').textContent = `${inspectedCandle.label} (${state.timeframe})`;
+    document.getElementById('insp-open').textContent = fmtNum(inspectedCandle.open, 3);
+    document.getElementById('insp-high').textContent = fmtNum(inspectedCandle.high, 3);
+    document.getElementById('insp-low').textContent = fmtNum(inspectedCandle.low, 3);
+    document.getElementById('insp-close').textContent = fmtNum(inspectedCandle.close, 3);
+    document.getElementById('insp-ma5').textContent = fmtNum(inspectedCandle.ma5, 2);
+    document.getElementById('insp-ma20').textContent = fmtNum(inspectedCandle.ma20, 2);
+    document.getElementById('insp-ma50').textContent = fmtNum(inspectedCandle.ma50, 2);
+
+    document.getElementById('mavol-cur').textContent = fmtVolM(inspectedCandle.volume);
+    document.getElementById('mavol-5').textContent = fmtVolM(inspectedCandle.mavol5);
+    document.getElementById('mavol-10').textContent = fmtVolM(inspectedCandle.mavol10);
+    document.getElementById('mavol-20').textContent = fmtVolM(inspectedCandle.mavol20);
+  }
 }
 
 /**
@@ -547,7 +813,6 @@ function drawCalibrationOrComparisonChart(compSeries, calHistory) {
     const xOf = (i) => pad.left + (i / Math.max(pts.length - 1, 1)) * plotW;
     const yOf = (v) => pad.top + ((maxV - v) / Math.max(maxV - minV, 1)) * plotH;
 
-    // 68% Band around Predicted Price
     ctx.beginPath();
     pts.forEach((p, i) => {
       const x = xOf(i);
@@ -562,7 +827,6 @@ function drawCalibrationOrComparisonChart(compSeries, calHistory) {
     ctx.fillStyle = 'hsla(38, 92%, 54%, 0.14)';
     ctx.fill();
 
-    // Predicted Line (Amber)
     ctx.beginPath();
     pts.forEach((p, i) => {
       const x = xOf(i);
@@ -574,7 +838,6 @@ function drawCalibrationOrComparisonChart(compSeries, calHistory) {
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    // Actual Market Price Line (Emerald)
     ctx.beginPath();
     pts.forEach((p, i) => {
       const x = xOf(i);
@@ -586,7 +849,6 @@ function drawCalibrationOrComparisonChart(compSeries, calHistory) {
     ctx.lineWidth = 2.2;
     ctx.stroke();
 
-    // Axis labels
     ctx.fillStyle = 'hsl(215, 12%, 55%)';
     ctx.font = '10.5px "JetBrains Mono", monospace';
     for (let g = 0; g <= 3; g++) {
@@ -599,7 +861,6 @@ function drawCalibrationOrComparisonChart(compSeries, calHistory) {
       }
     });
   } else {
-    // Self-Tuning Weight Evolution Mode
     const hist = calHistory || [];
     if (hist.length < 2) return;
 
@@ -636,6 +897,118 @@ function drawCalibrationOrComparisonChart(compSeries, calHistory) {
     ctx.fillText('Step 1 (Prior)', pad.left, H - 8);
     ctx.fillText(`Step ${hist.length} (Latest Tuned)`, W - pad.right - 115, H - 8);
   }
+}
+
+function bindChartInteractions() {
+  const canvas = document.getElementById('canvas-weekly-fan');
+  if (!canvas) return;
+
+  // Mouse Wheel Zoom (like Moomoo / TradingView)
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const zoomStep = Math.max(4, Math.round(state.visibleCount * 0.14));
+    if (e.deltaY < 0) {
+      state.visibleCount = Math.max(24, state.visibleCount - zoomStep);
+    } else {
+      state.visibleCount = Math.min(240, state.visibleCount + zoomStep);
+    }
+    drawInteractiveMoomooChart();
+  }, { passive: false });
+
+  // Click and Drag Horizontal Pan
+  canvas.addEventListener('mousedown', (e) => {
+    state.isDragging = true;
+    state.dragStartX = e.clientX;
+    state.dragStartPan = state.panOffset;
+  });
+
+  window.addEventListener('mouseup', () => {
+    state.isDragging = false;
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const padLeft = 52;
+    const padRight = 98;
+    const plotW = rect.width - padLeft - padRight;
+
+    const candles = state.candlesByTf[state.timeframe] || [];
+    const visCount = Math.max(20, Math.min(candles.length, state.visibleCount));
+
+    if (state.isDragging) {
+      const dx = e.clientX - state.dragStartX;
+      const barsPerPx = visCount / Math.max(plotW, 1);
+      state.panOffset = Math.round(state.dragStartPan + dx * barsPerPx);
+      drawInteractiveMoomooChart();
+      return;
+    }
+
+    const endIdx = candles.length - state.panOffset;
+    const startIdx = Math.max(0, endIdx - visCount);
+    const sliceLen = endIdx - startIdx;
+    const sim = state.payload && state.payload.simulation;
+    const futureSlots = (state.panOffset === 0 && state.showForecastCone && sim) ? 5 : 0;
+    const totalSlots = sliceLen + futureSlots;
+    const stepX = plotW / Math.max(totalSlots, 1);
+
+    const slot = Math.floor((mx - padLeft) / stepX);
+    if (slot >= 0 && slot < sliceLen) {
+      state.hoverIndex = slot;
+    } else {
+      state.hoverIndex = null;
+    }
+    state.hoverX = mx;
+    state.hoverY = my;
+    drawInteractiveMoomooChart();
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    state.hoverIndex = null;
+    state.hoverX = null;
+    state.hoverY = null;
+    drawInteractiveMoomooChart();
+  });
+
+  // Timeframe Switcher Buttons
+  document.querySelectorAll('#tf-button-group .tab-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      document.querySelectorAll('#tf-button-group .tab-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tf = btn.getAttribute('data-tf') || '1D';
+      state.timeframe = tf;
+      await fetchTimeframeCandles(tf, false);
+    });
+  });
+
+  document.getElementById('btn-zoom-in').addEventListener('click', () => {
+    state.visibleCount = Math.max(24, Math.round(state.visibleCount * 0.75));
+    drawInteractiveMoomooChart();
+  });
+
+  document.getElementById('btn-zoom-out').addEventListener('click', () => {
+    state.visibleCount = Math.min(240, Math.round(state.visibleCount * 1.3));
+    drawInteractiveMoomooChart();
+  });
+
+  document.getElementById('btn-zoom-reset').addEventListener('click', () => {
+    state.visibleCount = 110;
+    state.panOffset = 0;
+    drawInteractiveMoomooChart();
+  });
+
+  document.getElementById('btn-toggle-entries').addEventListener('click', (e) => {
+    state.showEntryZones = !state.showEntryZones;
+    e.currentTarget.textContent = state.showEntryZones ? 'Entry Zones: ON' : 'Entry Zones: OFF';
+    drawInteractiveMoomooChart();
+  });
+
+  document.getElementById('btn-toggle-cone').addEventListener('click', (e) => {
+    state.showForecastCone = !state.showForecastCone;
+    e.currentTarget.textContent = state.showForecastCone ? '1W Forecast Cone: ON' : '1W Forecast Cone: OFF';
+    drawInteractiveMoomooChart();
+  });
 }
 
 function bindEvents() {
@@ -696,7 +1069,7 @@ function bindEvents() {
 
   window.addEventListener('resize', () => {
     if (state.payload) {
-      drawWeeklyFanChart(state.payload.simulation.one_week_forecast.timeline, state.payload.simulation.entry_recommendations);
+      drawInteractiveMoomooChart();
       drawCalibrationOrComparisonChart(
         state.payload.simulation.live_vs_simulated.historical_comparison_series,
         state.payload.calibration.history
@@ -706,7 +1079,7 @@ function bindEvents() {
 }
 
 function updateSliderLabels() {
-  const spot = (state.payload && state.payload.market && state.payload.market.current_price) || 190.0;
+  const spot = (state.payload && state.payload.market && state.payload.market.current_price) || 189.0;
   const whaleMusd = parseFloat(document.getElementById('slider-whale-musd').value || '0');
   const shares = Math.round((Math.abs(whaleMusd) * 1e6) / spot);
   const sign = whaleMusd > 0 ? '+' : '';
@@ -728,6 +1101,7 @@ function updateSliderLabels() {
 
 document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
+  bindChartInteractions();
   updateSliderLabels();
   fetchDashboard(false);
   setInterval(pollLiveTickEverySecond, 1000);

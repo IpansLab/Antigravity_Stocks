@@ -9,6 +9,7 @@ import os
 from typing import Any, Dict
 
 from fastapi import FastAPI, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -21,7 +22,14 @@ STATIC_DIR = os.path.join(BASE_DIR, "static")
 app = FastAPI(
     title="NVDA Multi-Factor Tracker & Self-Tuning Price Simulator",
     description="Tracks NVDA price drivers, whale/institutional block activity, overnight/open/1-week simulations, optimal entry points, and online error-driven model calibration.",
-    version="1.0.0",
+    version="1.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
@@ -54,6 +62,15 @@ def get_dashboard(refresh: bool = Query(False)) -> Dict[str, Any]:
 @app.get("/api/live_tick")
 def get_live_tick() -> Dict[str, Any]:
     return service.fetcher.get_fast_live_tick()
+
+
+@app.get("/api/candles")
+def get_candles(
+    timeframe: str = Query("1D", description="Timeframe: 1m, 5m, 15m, or 1D"),
+    limit: int = Query(220, ge=30, le=500),
+    refresh: bool = Query(False),
+) -> Dict[str, Any]:
+    return service.fetcher.get_ohlcv_candles(timeframe=timeframe, limit=limit, force_refresh=refresh)
 
 
 @app.post("/api/simulate")

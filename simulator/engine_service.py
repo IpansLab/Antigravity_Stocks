@@ -95,10 +95,12 @@ class NVDAQuantService:
         )
 
         calibration_history = self.db.get_calibration_history(limit=30)
+        candles_1d = self.fetcher.get_ohlcv_candles(timeframe="1D", limit=220, force_refresh=force_refresh)
 
         return {
             "generated_at": now_iso,
             "market": session_info,
+            "chart_candles": candles_1d,
             "multi_asset_peers": multi_asset,
             "whale_activity": whale_data,
             "factors": factor_result,

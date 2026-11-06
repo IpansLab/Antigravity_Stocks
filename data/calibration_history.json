@@ -1,24 +1,24 @@
 {
-  "updated_at": "2026-11-06T12:10:11.623243+00:00",
+  "updated_at": "2026-11-06T16:01:39.685359+00:00",
   "current_calibration_state": {
-    "id": 9,
-    "updated_at": "2026-11-06T12:10:11.598888+00:00",
+    "id": 10,
+    "updated_at": "2026-11-06T16:01:39.552319+00:00",
     "step_type": "LIVE_ERROR_FINE_TUNE",
-    "bias_drift": -0.005349,
+    "bias_drift": -0.004741,
     "vol_multiplier": 1.0862,
     "learning_rate": 0.11,
-    "rolling_mae": 3.0,
-    "rolling_mape": 1.5,
-    "directional_accuracy": 83.3,
+    "rolling_mae": 3.02,
+    "rolling_mape": 1.51,
+    "directional_accuracy": 75.0,
     "baseline_mae": 5.32,
-    "samples_evaluated": 84,
-    "notes": "Live fine-tune at NVDA $188.80 (residual +0.13%): updated weights & drift bias (-0.535%).",
+    "samples_evaluated": 86,
+    "notes": "Live fine-tune at NVDA $188.92 (residual -0.37%): updated weights & drift bias (-0.474%).",
     "weights": {
-      "whale_institutional": 0.1436,
-      "overnight_premarket": 0.4599,
-      "sector_peers": 0.2307,
-      "macro_regime": 0.0837,
-      "technical_sentiment": 0.0821
+      "whale_institutional": 0.1497,
+      "overnight_premarket": 0.4477,
+      "sector_peers": 0.2249,
+      "macro_regime": 0.0869,
+      "technical_sentiment": 0.0908
     }
   },
   "weight_evolution_history": [
@@ -209,6 +209,27 @@
         "sector_peers": 0.2307,
         "macro_regime": 0.0837,
         "technical_sentiment": 0.0821
+      }
+    },
+    {
+      "id": 10,
+      "updated_at": "2026-11-06T16:01:39.552319+00:00",
+      "step_type": "LIVE_ERROR_FINE_TUNE",
+      "bias_drift": -0.004741,
+      "vol_multiplier": 1.0862,
+      "learning_rate": 0.11,
+      "rolling_mae": 3.02,
+      "rolling_mape": 1.51,
+      "directional_accuracy": 75.0,
+      "baseline_mae": 5.32,
+      "samples_evaluated": 86,
+      "notes": "Live fine-tune at NVDA $188.92 (residual -0.37%): updated weights & drift bias (-0.474%).",
+      "weights": {
+        "whale_institutional": 0.1497,
+        "overnight_premarket": 0.4477,
+        "sector_peers": 0.2249,
+        "macro_regime": 0.0869,
+        "technical_sentiment": 0.0908
       }
     }
   ],

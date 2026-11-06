@@ -4,38 +4,50 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>NVDA Multi-Factor Stock Tracker & Self-Tuning Price Simulator</title>
-  <meta name="description" content="Quantitative multi-factor price tracker, institutional whale monitor, overnight/market-open/1-week simulator, optimal entry point engine, and online error-tuning system for NVIDIA (NVDA)." />
+  <meta name="description" content="Moomoo/TradingView-grade interactive candlestick & MAVOL chart with predicted entry points, multi-factor attribution, whale monitor, and self-tuning price simulator for NVIDIA (NVDA)." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
-  <!-- Sticky Top Command Header -->
+  <!-- Sticky Moomoo-Style Top Quote Header -->
   <header class="top-header" id="top-command-bar">
     <div class="brand-cluster">
       <div class="ticker-identity">
-        <h1>NVDA Quant Terminal</h1>
-        <span class="ticker-exchange">NASDAQ · NVIDIA CORP</span>
+        <h1>NVDA NVIDIA</h1>
+        <span class="ticker-exchange" id="active-session-badge">REGULAR</span>
       </div>
 
       <div class="live-quote-ribbon">
         <div class="spot-price-block">
-          <span class="spot-price mono" id="live-spot-price">$0.00</span>
-          <span class="spot-delta mono delta-flat" id="live-spot-delta">0.00%</span>
+          <span class="spot-price mono" id="live-spot-price">$0.000</span>
+          <span class="spot-delta mono delta-up" id="live-spot-delta">+0.000 (+0.00%)</span>
         </div>
-        <span class="session-tag" id="active-session-badge">LOADING</span>
+
         <div class="kv-cell">
-          <span class="kv-label">Last Reg Close</span>
-          <span class="kv-val mono" id="last-reg-close-val">$0.00</span>
-        </div>
-        <div class="kv-cell">
-          <span class="kv-label">Intraday VWAP</span>
-          <span class="kv-val mono" id="intraday-vwap-val">$0.00</span>
+          <span class="kv-label">High</span>
+          <span class="kv-val mono" id="hdr-day-high">$0.000</span>
         </div>
         <div class="kv-cell">
-          <span class="kv-label">Live vs. Simulated</span>
-          <span class="kv-val mono" id="live-vs-sim-badge">--</span>
+          <span class="kv-label">Low</span>
+          <span class="kv-val mono" id="hdr-day-low">$0.000</span>
+        </div>
+        <div class="kv-cell">
+          <span class="kv-label">Open</span>
+          <span class="kv-val mono" id="hdr-day-open">$0.000</span>
+        </div>
+        <div class="kv-cell">
+          <span class="kv-label">Prev Close</span>
+          <span class="kv-val mono" id="last-reg-close-val">$0.000</span>
+        </div>
+        <div class="kv-cell">
+          <span class="kv-label">Real Volume</span>
+          <span class="kv-val mono" style="color:var(--amber-primary);" id="hdr-real-volume">0.00M</span>
+        </div>
+        <div class="kv-cell">
+          <span class="kv-label">VWAP</span>
+          <span class="kv-val mono" id="intraday-vwap-val">$0.000</span>
         </div>
         <div class="kv-cell">
           <span class="kv-label">1s Feed Clock</span>
@@ -49,10 +61,10 @@
         LIVE 1s: ON
       </button>
       <button class="btn btn-amber" id="btn-fine-tune" type="button" title="Compare recent predictions against current market price and update factor weights">
-        Fine-Tune Algorithm (Learn from Error)
+        Fine-Tune Algorithm
       </button>
       <button class="btn" id="btn-refresh-data" type="button">
-        Refresh Live Feed
+        Refresh Feed
       </button>
     </div>
   </header>
@@ -68,7 +80,7 @@
     <section class="horizon-strip" aria-label="Multi-Horizon Price Predictions">
       <div class="metric-panel" id="card-overnight">
         <div class="metric-header">
-          <span class="metric-title">Overnight Market (20:00–04:00 ET)</span>
+          <span class="metric-title">Overnight Session (20:00–04:00 ET)</span>
           <span class="spot-delta mono" id="overnight-ret-badge">--</span>
         </div>
         <div class="metric-main-row">
@@ -130,27 +142,73 @@
       </div>
     </section>
 
-    <!-- Primary Row: 1-Week Trajectory Fan Chart + Recommended Entry Points -->
+    <!-- Primary Row: Moomoo / TradingView Interactive Candlestick + MAVOL + Entry Points Chart AND Entry Point Cards -->
     <div class="primary-grid">
-      <!-- Left: 1-Week Trajectory Fan Chart + 5-Day Cards -->
+      <!-- Left: Interactive Moomoo / TradingView Candlestick + Volume + Entry Points Chart -->
       <section class="section-panel" id="panel-weekly-chart">
         <div class="panel-header">
           <div class="panel-title-group">
-            <h2>1-Week (5-Trading-Day) Simulated Price Trajectory & Entry Zones</h2>
-            <p class="panel-subtitle">2,000 Monte Carlo Jump-Diffusion paths with 68% / 90% confidence bands, Most Suitable Entry, and Safest Entry levels</p>
+            <h2>Live Market Candlesticks, Real MAVOL & Predicted Entry Points</h2>
+            <p class="panel-subtitle">Scroll to zoom · Drag to pan · Hover for OHLCV & MAVOL inspector · Overlaid with Predicted Optimal & Safe Entry Zones</p>
           </div>
-          <span class="session-tag mono" id="weekly-trend-badge">CALCULATING</span>
+
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <!-- Timeframe Switcher -->
+            <div class="tab-group" id="tf-button-group">
+              <button class="tab-btn" data-tf="1m" type="button">1m</button>
+              <button class="tab-btn" data-tf="5m" type="button">5m</button>
+              <button class="tab-btn" data-tf="15m" type="button">15m</button>
+              <button class="tab-btn active" data-tf="1D" type="button">1D (1Y)</button>
+            </div>
+
+            <!-- Zoom & Overlay Controls -->
+            <button class="btn" id="btn-zoom-in" type="button" style="padding:4px 9px;" title="Zoom In">+</button>
+            <button class="btn" id="btn-zoom-out" type="button" style="padding:4px 9px;" title="Zoom Out">−</button>
+            <button class="btn" id="btn-zoom-reset" type="button" style="padding:4px 9px;" title="Reset View">Reset</button>
+            <button class="btn btn-amber" id="btn-toggle-entries" type="button" style="padding:4px 10px;">
+              Entry Zones: ON
+            </button>
+            <button class="btn" id="btn-toggle-cone" type="button" style="padding:4px 10px;">
+              1W Forecast Cone: ON
+            </button>
+          </div>
         </div>
+
         <div class="panel-body">
-          <div class="chart-canvas-wrap">
+          <!-- Moomoo-Style Live Candle OHLC + Moving Average Bar -->
+          <div class="mono" style="display:flex;flex-wrap:wrap;gap:14px;font-size:0.75rem;margin-bottom:6px;padding:6px 10px;background:var(--bg-subtle);border:1px solid var(--border-subtle);border-radius:4px;">
+            <span id="insp-date" style="color:var(--text-secondary);font-weight:600;">2026-11-06</span>
+            <span>O: <strong id="insp-open">--</strong></span>
+            <span>H: <strong id="insp-high">--</strong></span>
+            <span>L: <strong id="insp-low">--</strong></span>
+            <span>C: <strong id="insp-close">--</strong></span>
+            <span style="color:hsl(38, 92%, 54%);">MA5: <span id="insp-ma5">--</span></span>
+            <span style="color:hsl(196, 86%, 54%);">MA20: <span id="insp-ma20">--</span></span>
+            <span style="color:hsl(320, 75%, 62%);">MA50: <span id="insp-ma50">--</span></span>
+            <span style="color:hsl(158, 78%, 45%);">OPT ENTRY: <strong id="insp-opt-entry">--</strong></span>
+            <span style="color:hsl(196, 86%, 54%);">SAFE ENTRY: <strong id="insp-safe-entry">--</strong></span>
+          </div>
+
+          <!-- Interactive Candlestick + Volume Split Canvas -->
+          <div class="chart-canvas-wrap" style="height:460px;cursor:crosshair;">
             <canvas id="canvas-weekly-fan"></canvas>
           </div>
-          <div class="chart-legend-row">
-            <span class="legend-item"><span class="legend-swatch" style="background:hsl(158, 78%, 42%);"></span>Simulated Median Path</span>
-            <span class="legend-item"><span class="legend-swatch" style="background:hsla(158, 78%, 42%, 0.35);height:8px;"></span>68% Confidence Band</span>
-            <span class="legend-item"><span class="legend-swatch" style="background:hsl(38, 92%, 54%);"></span>Most Suitable Entry (Optimal Profit)</span>
-            <span class="legend-item"><span class="legend-swatch" style="background:hsl(196, 86%, 54%);"></span>Safest Entry (Margin of Safety)</span>
-            <span class="legend-item"><span class="legend-swatch" style="background:hsl(350, 82%, 58%);"></span>Stop-Loss Floor</span>
+
+          <!-- Moomoo-Style MAVOL Legend Bar -->
+          <div class="mono" style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;font-size:0.75rem;margin-top:8px;padding:6px 10px;background:var(--bg-subtle);border:1px solid var(--border-subtle);border-radius:4px;">
+            <div style="display:flex;flex-wrap:wrap;gap:16px;">
+              <span style="font-weight:700;color:var(--text-primary);">MAVOL</span>
+              <span style="color:hsl(350, 82%, 62%);">VOL: <strong id="mavol-cur">--</strong></span>
+              <span style="color:hsl(38, 92%, 54%);">MAVOL5: <strong id="mavol-5">--</strong></span>
+              <span style="color:hsl(196, 86%, 54%);">MAVOL10: <strong id="mavol-10">--</strong></span>
+              <span style="color:hsl(320, 75%, 62%);">MAVOL20: <strong id="mavol-20">--</strong></span>
+            </div>
+            <div style="display:flex;gap:14px;color:var(--text-secondary);">
+              <span>★ Opt Entry: <strong style="color:hsl(38, 92%, 54%);" id="legend-opt-p">--</strong></span>
+              <span>◆ Safe Entry: <strong style="color:hsl(196, 86%, 54%);" id="legend-safe-p">--</strong></span>
+              <span>▲ Target TP1: <strong style="color:hsl(158, 78%, 45%);" id="legend-tp1-p">--</strong></span>
+              <span>▼ Stop: <strong style="color:hsl(350, 82%, 58%);" id="legend-stop-p">--</strong></span>
+            </div>
           </div>
 
           <div class="five-day-strip" id="five-day-cards-container">
@@ -164,8 +222,9 @@
         <div class="panel-header">
           <div class="panel-title-group">
             <h2>Profit & Safety Entry Point Recommendations</h2>
-            <p class="panel-subtitle">Calculated from 1-week pullback distribution, Volume Profile POC, and Reward-to-Risk optimization</p>
+            <p class="panel-subtitle">Plotted directly on the live chart · Calculated from 1-week pullback distribution & Volume POC</p>
           </div>
+          <span class="session-tag mono" id="weekly-trend-badge">CALCULATING</span>
         </div>
         <div class="panel-body">
           <div class="entry-cards-stack">
@@ -173,7 +232,7 @@
             <div class="entry-card" id="box-optimal-entry">
               <div class="entry-card-top">
                 <div>
-                  <span class="entry-badge badge-optimal">Most Suitable Entry Point · Optimal Profit</span>
+                  <span class="entry-badge badge-optimal">★ Most Suitable Entry Point · Optimal Profit</span>
                   <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;" id="opt-timing-window">--</div>
                 </div>
                 <div style="text-align:right;">
@@ -215,7 +274,7 @@
             <div class="entry-card" id="box-safe-entry">
               <div class="entry-card-top">
                 <div>
-                  <span class="entry-badge badge-safe">Safest Entry Point · Maximum Margin of Safety</span>
+                  <span class="entry-badge badge-safe">◆ Safest Entry Point · Maximum Margin of Safety</span>
                   <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;" id="safe-timing-window">--</div>
                 </div>
                 <div style="text-align:right;">
@@ -278,7 +337,6 @@
 
     <!-- Secondary Row: Multi-Factor Attribution + What-If Simulator AND Self-Tuning Calibration + Whale Monitor -->
     <div class="secondary-grid">
-      <!-- Left Column: Multi-Factor Breakdown + Interactive What-If Whale/Market Simulator -->
       <div style="display:flex;flex-direction:column;gap:18px;">
         <section class="section-panel" id="panel-factors">
           <div class="panel-header">
@@ -289,9 +347,7 @@
             <span class="spot-delta mono" id="composite-score-badge">Score: 0.000</span>
           </div>
           <div class="panel-body">
-            <div class="factor-list" id="factor-breakdown-list">
-              <!-- Populated dynamically -->
-            </div>
+            <div class="factor-list" id="factor-breakdown-list"></div>
           </div>
         </section>
 
@@ -422,9 +478,7 @@
               </div>
             </div>
 
-            <div class="event-feed" id="whale-events-feed">
-              <!-- Populated dynamically -->
-            </div>
+            <div class="event-feed" id="whale-events-feed"></div>
           </div>
         </section>
       </div>
