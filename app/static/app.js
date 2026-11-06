@@ -9,9 +9,15 @@ const state = {
   candlesByTf: {},
   visibleCount: 110,
   panOffset: 0, // 0 = anchored at latest right-most bar; >0 = panned left into history
+  vertScale: 1.0,
+  vertPan: 0.0,
   isDragging: false,
+  isScalingY: false,
   dragStartX: 0,
+  dragStartY: 0,
   dragStartPan: 0,
+  dragStartVertPan: 0,
+  dragStartVertScale: 1.0,
   hoverIndex: null,
   hoverX: null,
   hoverY: null,
@@ -521,9 +527,11 @@ function drawInteractiveMoomooChart() {
     });
   }
 
-  const pSpan = Math.max(maxP - minP, 1.0);
-  minP -= pSpan * 0.05;
-  maxP += pSpan * 0.06;
+  const pSpan = Math.max(maxP - minP, 1.0) * 1.11;
+  const fullMid = (maxP + minP) / 2;
+  const scaledHalf = pSpan / (2 * Math.max(0.25, state.vertScale));
+  minP = fullMid + state.vertPan - scaledHalf;
+  maxP = fullMid + state.vertPan + scaledHalf;
 
   const xOfSlot = (slotIdx) => padLeft + (slotIdx + 0.5) * stepX;
   const yOfPrice = (p) => priceTop + ((maxP - p) / (maxP - minP)) * priceH;
@@ -881,18 +889,20 @@ function drawCalibrationOrComparisonChart(compSeries, calHistory) {
     const hist = calHistory || [];
     if (hist.length < 2) return;
 
-    const xOf = (i) => pad.left + (i / Math.max(hist.length - 1, 1)) * plotW;
+    const padR = 128;
+    const wPlotW = W - pad.left - padR;
+    const xOf = (i) => pad.left + (i / Math.max(hist.length - 1, 1)) * wPlotW;
     const yOf = (w) => pad.top + ((0.55 - w) / 0.55) * plotH;
 
-    const seriesColors = {
-      overnight_premarket: 'hsl(158, 78%, 45%)',
-      sector_peers: 'hsl(38, 92%, 54%)',
-      whale_institutional: 'hsl(196, 86%, 54%)',
-      technical_sentiment: 'hsl(350, 82%, 58%)',
-      macro_regime: 'hsl(214, 25%, 72%)',
-    };
+    const seriesMeta = [
+      { key: 'overnight_premarket', short: 'Overnight', col: 'hsl(158, 78%, 45%)' },
+      { key: 'sector_peers', short: 'Semi Peers', col: 'hsl(38, 92%, 54%)' },
+      { key: 'whale_institutional', short: 'Whale 13F', col: 'hsl(196, 86%, 54%)' },
+      { key: 'technical_sentiment', short: 'Tech/News', col: 'hsl(350, 82%, 58%)' },
+      { key: 'macro_regime', short: 'Macro/VIX', col: 'hsl(272, 75%, 65%)' },
+    ];
 
-    Object.entries(seriesColors).forEach(([key, col]) => {
+    seriesMeta.forEach(({ key, col }) => {
       ctx.beginPath();
       hist.forEach((h, i) => {
         const w = (h.weights && h.weights[key]) || 0.2;
@@ -902,8 +912,26 @@ function drawCalibrationOrComparisonChart(compSeries, calHistory) {
         else ctx.lineTo(x, y);
       });
       ctx.strokeStyle = col;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.2;
       ctx.stroke();
+    });
+
+    // Direct Right-Hand End-of-Line Labels with anti-collision spacing
+    const lastW = hist[hist.length - 1].weights || {};
+    const endLabels = seriesMeta.map((sm) => {
+      const val = lastW[sm.key] || 0.2;
+      return { ...sm, val, y: yOf(val) };
+    }).sort((a, b) => a.y - b.y);
+
+    for (let i = 1; i < endLabels.length; i++) {
+      if (endLabels[i].y - endLabels[i - 1].y < 14) {
+        endLabels[i].y = endLabels[i - 1].y + 14;
+      }
+    }
+    endLabels.forEach((lbl) => {
+      ctx.fillStyle = lbl.col;
+      ctx.font = '700 10.5px "JetBrains Mono", monospace';
+      ctx.fillText(`${lbl.short} ${(lbl.val * 100).toFixed(1)}%`, W - padR + 6, lbl.y + 3);
     });
 
     ctx.fillStyle = 'hsl(215, 12%, 55%)';
@@ -911,8 +939,8 @@ function drawCalibrationOrComparisonChart(compSeries, calHistory) {
     [0.1, 0.25, 0.4, 0.5].forEach((w) => {
       ctx.fillText(`${(w * 100).toFixed(0)}%`, 8, yOf(w) + 3);
     });
-    ctx.fillText('Step 1 (Prior)', pad.left, H - 8);
-    ctx.fillText(`Step ${hist.length} (Latest Tuned)`, W - pad.right - 115, H - 8);
+    ctx.fillText('Prior', pad.left, H - 8);
+    ctx.fillText(`Live Tuned`, W - padR - 64, H - 8);
   }
 }
 
@@ -920,27 +948,53 @@ function bindChartInteractions() {
   const canvas = document.getElementById('canvas-weekly-fan');
   if (!canvas) return;
 
-  // Mouse Wheel Zoom (like Moomoo / TradingView)
+  // Mouse Wheel Zoom: Right Axis (or Shift/Alt) scales Bar Height vertically; main area zooms horizontally
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
-    const zoomStep = Math.max(4, Math.round(state.visibleCount * 0.14));
-    if (e.deltaY < 0) {
-      state.visibleCount = Math.max(24, state.visibleCount - zoomStep);
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const padRight = 98;
+    if (mx >= rect.width - padRight || e.shiftKey || e.altKey) {
+      const factor = e.deltaY < 0 ? 1.12 : 0.89;
+      state.vertScale = Math.max(0.25, Math.min(4.5, +(state.vertScale * factor).toFixed(2)));
     } else {
-      state.visibleCount = Math.min(240, state.visibleCount + zoomStep);
+      const zoomStep = Math.max(4, Math.round(state.visibleCount * 0.14));
+      if (e.deltaY < 0) {
+        state.visibleCount = Math.max(24, state.visibleCount - zoomStep);
+      } else {
+        state.visibleCount = Math.min(240, state.visibleCount + zoomStep);
+      }
     }
     drawInteractiveMoomooChart();
   }, { passive: false });
 
-  // Click and Drag Horizontal Pan
+  canvas.addEventListener('dblclick', () => {
+    state.vertScale = 1.0;
+    state.vertPan = 0.0;
+    drawInteractiveMoomooChart();
+  });
+
+  // Click and Drag Horizontal/Vertical Pan or Right-Axis Vertical Scale
   canvas.addEventListener('mousedown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const padRight = 98;
+    if (mx >= rect.width - padRight) {
+      state.isScalingY = true;
+      state.dragStartY = e.clientY;
+      state.dragStartVertScale = state.vertScale;
+      return;
+    }
     state.isDragging = true;
     state.dragStartX = e.clientX;
+    state.dragStartY = e.clientY;
     state.dragStartPan = state.panOffset;
+    state.dragStartVertPan = state.vertPan;
   });
 
   window.addEventListener('mouseup', () => {
     state.isDragging = false;
+    state.isScalingY = false;
   });
 
   canvas.addEventListener('mousemove', (e) => {
@@ -954,10 +1008,21 @@ function bindChartInteractions() {
     const candles = state.candlesByTf[state.timeframe] || [];
     const visCount = Math.max(20, Math.min(candles.length, state.visibleCount));
 
+    canvas.style.cursor = (mx >= rect.width - padRight || state.isScalingY) ? 'ns-resize' : 'crosshair';
+
+    if (state.isScalingY) {
+      const dy = state.dragStartY - e.clientY;
+      state.vertScale = Math.max(0.25, Math.min(4.5, +(state.dragStartVertScale * Math.pow(1.008, dy)).toFixed(2)));
+      drawInteractiveMoomooChart();
+      return;
+    }
+
     if (state.isDragging) {
       const dx = e.clientX - state.dragStartX;
+      const dy = e.clientY - state.dragStartY;
       const barsPerPx = visCount / Math.max(plotW, 1);
       state.panOffset = Math.round(state.dragStartPan + dx * barsPerPx);
+      state.vertPan = +(state.dragStartVertPan + dy * (0.04 / Math.max(0.25, state.vertScale))).toFixed(3);
       drawInteractiveMoomooChart();
       return;
     }
