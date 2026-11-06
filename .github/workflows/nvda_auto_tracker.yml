@@ -1,0 +1,49 @@
+name: NVDA Self-Tuning Price Tracker & Forecast
+
+on:
+  schedule:
+    # Pre-Market / Before 09:30 ET Opening Bell (Mon-Fri)
+    - cron: '15 13 * * 1-5'
+    # Post-Market / After 16:00 ET Market Close (Mon-Fri)
+    - cron: '15 21 * * 1-5'
+    # Overnight Market Checkpoint (Tue-Sat UTC / Mon-Fri Night ET)
+    - cron: '0 2 * * 2-6'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  track-and-calibrate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Fetch Live NVDA Data, Fine-Tune Model & Export Forecast
+        run: |
+          python cli.py --refresh --fine-tune --export-snapshot
+
+      - name: Commit & Push Updated Database & Forecast Snapshots
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/nvda_tracker.db data/calibration_history.json data/latest_forecast.json
+          if git diff --cached --quiet; then
+            echo "No database changes to commit."
+          else
+            git commit -m "chore(data): auto-update NVDA predictions, whale events, and self-tuned weights [skip ci]"
+            git pull --rebase origin main
+            git push origin main
+          fi

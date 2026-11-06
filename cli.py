@@ -50,6 +50,11 @@ def main() -> None:
         default=0.0,
         help="Simulate a What-If semiconductor sector (SMH/TSM/AMD) shock (%)",
     )
+    parser.add_argument(
+        "--export-snapshot",
+        action="store_true",
+        help="Export latest calibration history and forecast JSON files to data/",
+    )
     parser.add_argument("--json", action="store_true", help="Output full payload as JSON")
     args = parser.parse_args()
 
@@ -81,6 +86,32 @@ def main() -> None:
         force_refresh=args.refresh,
         what_if_overrides=overrides if overrides else None,
     )
+
+    if args.export_snapshot or args.fine_tune:
+        import os
+        data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+        cal_export = {
+            "updated_at": payload["generated_at"],
+            "current_calibration_state": payload["calibration"]["current_state"],
+            "weight_evolution_history": payload["calibration"]["history"],
+            "recent_predictions_vs_actuals": payload["simulation"]["live_vs_simulated"]["historical_comparison_series"],
+        }
+        forecast_export = {
+            "generated_at": payload["generated_at"],
+            "symbol": "NVDA",
+            "current_price": payload["market"]["current_price"],
+            "active_session": payload["market"]["active_session"],
+            "composite_score": payload["factors"]["composite_score"],
+            "composite_label": payload["factors"]["composite_label"],
+            "factor_scores": payload["factors"]["scores"],
+            "short_term_horizons": payload["simulation"]["short_term_horizons"],
+            "one_week_forecast": payload["simulation"]["one_week_forecast"],
+            "entry_recommendations": payload["simulation"]["entry_recommendations"],
+        }
+        with open(os.path.join(data_dir, "calibration_history.json"), "w", encoding="utf-8") as f_cal:
+            json.dump(cal_export, f_cal, indent=2)
+        with open(os.path.join(data_dir, "latest_forecast.json"), "w", encoding="utf-8") as f_fc:
+            json.dump(forecast_export, f_fc, indent=2)
 
     if args.json:
         print(json.dumps(payload, indent=2))
