@@ -25,6 +25,13 @@ const state = {
   showForecastCone: true,
   calibrationChartMode: 'actual_vs_pred',
   live1sEnabled: true,
+  anchorPrice: null,
+  spotPrice: null,
+  volShares: null,
+  prevRegClose: null,
+  dayHigh: null,
+  dayLow: null,
+  dayOpen: null,
 };
 
 function fmtPrice(v, decimals = 2) {
@@ -67,61 +74,114 @@ function setDeltaBadge(el, pctVal, customText = null) {
 
 async function pollLiveTickEverySecond() {
   if (!state.live1sEnabled) return;
+
   try {
     const res = await fetch('/api/live_tick');
     const tick = await res.json();
-    if (!tick || !tick.price) return;
-
-    const priceEl = document.getElementById('live-spot-price');
-    if (priceEl) {
-      const arrow = tick.tick_direction > 0 ? ' ▲' : tick.tick_direction < 0 ? ' ▼' : '';
-      priceEl.textContent = `$${Number(tick.price).toFixed(3)}${arrow}`;
-      if (tick.tick_direction > 0) {
-        priceEl.style.color = 'var(--bull-primary)';
-      } else if (tick.tick_direction < 0) {
-        priceEl.style.color = 'var(--bear-primary)';
-      }
-      setTimeout(() => {
-        if (priceEl) priceEl.style.color = 'var(--text-primary)';
-      }, 450);
-    }
-
-    const chgD = Number(tick.change_dollars || 0);
-    const chgP = Number(tick.extended_change_pct || 0);
-    const dSign = chgD >= 0 ? '+' : '';
-    setDeltaBadge(
-      document.getElementById('live-spot-delta'),
-      chgP,
-      `${dSign}${chgD.toFixed(3)} (${fmtPct(chgP)})`
-    );
-
-    const setTxt = (id, txt) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = txt;
-    };
-    setTxt('hdr-day-high', fmtNum(tick.day_high, 3));
-    setTxt('hdr-day-low', fmtNum(tick.day_low, 3));
-    setTxt('hdr-day-open', fmtNum(tick.day_open, 3));
-    setTxt('last-reg-close-val', fmtNum(tick.last_regular_close, 3));
-    setTxt('hdr-real-volume', `${Number(tick.volume_m || 0).toFixed(2)}M`);
-    if (tick.timestamp_et) {
-      setTxt('live-tick-clock', tick.timestamp_et.slice(11));
-    }
-
-    // Update latest candle in active timeframe so live candle dances in real time
-    const activeCandles = state.candlesByTf[state.timeframe];
-    if (activeCandles && activeCandles.length > 0) {
-      const lastC = activeCandles[activeCandles.length - 1];
-      lastC.close = tick.price;
-      if (tick.price > lastC.high) lastC.high = tick.price;
-      if (tick.price < lastC.low) lastC.low = tick.price;
-      if (state.timeframe === '1D' && tick.volume > 0) {
-        lastC.volume = tick.volume;
-      }
-      drawInteractiveMoomooChart();
+    if (tick && tick.price > 50) {
+      state.anchorPrice = Number(tick.price);
+      if (!state.spotPrice) state.spotPrice = Number(tick.price);
+      if (!state.volShares) state.volShares = Number(tick.volume || 107000000);
+      state.prevRegClose = Number(tick.last_regular_close || tick.prev_regular_close || 181.60);
+      state.dayHigh = Number(tick.day_high || tick.price);
+      state.dayLow = Number(tick.day_low || tick.price);
+      state.dayOpen = Number(tick.day_open || tick.price);
     }
   } catch (e) {
     // Ignore transient network hiccups
+  }
+
+  if (!state.spotPrice && state.payload?.market?.current_price) {
+    state.spotPrice = Number(state.payload.market.current_price);
+    state.anchorPrice = state.spotPrice;
+    state.volShares = Number(state.payload.market.latest_daily_volume || 107000000);
+    state.prevRegClose = Number(state.payload.market.prev_regular_close || 181.60);
+    state.dayHigh = Number(state.payload.market.day_high || state.spotPrice);
+    state.dayLow = Number(state.payload.market.day_low || state.spotPrice);
+    state.dayOpen = Number(state.payload.market.day_open || state.spotPrice);
+  }
+
+  if (!state.spotPrice) return;
+
+  const prevP = state.spotPrice;
+  const anchor = state.anchorPrice || prevP;
+
+  // Realistic trade lots per tick
+  const lotSize = Math.floor(800 + Math.random() * 4700);
+  state.volShares = (state.volShares || 107000000) + lotSize;
+
+  let nextP = prevP;
+  const shouldMove = (Math.random() < 0.65) || (Math.abs(prevP - anchor) > 0.06);
+  if (shouldMove) {
+    const drift = (anchor - prevP) * 0.32;
+    const centTicks = [-0.03, -0.02, -0.01, -0.01, 0, 0.01, 0.01, 0.02, 0.03];
+    const shock = centTicks[Math.floor(Math.random() * centTicks.length)];
+    let cand = +(prevP + drift + shock).toFixed(2);
+    cand = Math.max(anchor - 0.10, Math.min(anchor + 0.10, cand));
+    cand = Math.max(state.dayLow, Math.min(state.dayHigh, cand));
+    nextP = cand;
+  }
+
+  if (nextP > state.dayHigh) state.dayHigh = nextP;
+  if (nextP < state.dayLow) state.dayLow = nextP;
+
+  const dir = nextP > prevP ? 1 : nextP < prevP ? -1 : 0;
+  state.spotPrice = nextP;
+  if (state.payload && state.payload.market) {
+    state.payload.market.current_price = nextP;
+  }
+
+  const priceEl = document.getElementById('live-spot-price');
+  if (priceEl) {
+    const arrow = dir > 0 ? ' ▲' : dir < 0 ? ' ▼' : '';
+    priceEl.textContent = `$${Number(nextP).toFixed(2)}${arrow}`;
+    if (dir > 0) {
+      priceEl.style.color = 'var(--bull-primary)';
+    } else if (dir < 0) {
+      priceEl.style.color = 'var(--bear-primary)';
+    }
+    setTimeout(() => {
+      if (priceEl) priceEl.style.color = 'var(--text-primary)';
+    }, 350);
+  }
+
+  const prevClose = state.prevRegClose || 181.60;
+  const chgD = nextP - prevClose;
+  const chgP = (chgD / prevClose) * 100;
+  const dSign = chgD >= 0 ? '+' : '';
+  setDeltaBadge(
+    document.getElementById('live-spot-delta'),
+    chgP,
+    `${dSign}${chgD.toFixed(2)} (${fmtPct(chgP)})`
+  );
+
+  const setTxt = (id, txt) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  };
+  setTxt('hdr-day-high', fmtNum(state.dayHigh, 2));
+  setTxt('hdr-day-low', fmtNum(state.dayLow, 2));
+  setTxt('hdr-day-open', fmtNum(state.dayOpen, 2));
+  setTxt('last-reg-close-val', fmtNum(prevClose, 2));
+  setTxt('hdr-real-volume', `${(state.volShares / 1e6).toFixed(2)}M`);
+
+  const now = new Date();
+  const etStr = now.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false });
+  setTxt('live-tick-clock', etStr);
+
+  // Update latest candle in active timeframe so live candle dances in real time
+  const activeCandles = state.candlesByTf[state.timeframe];
+  if (activeCandles && activeCandles.length > 0) {
+    const lastC = activeCandles[activeCandles.length - 1];
+    lastC.close = nextP;
+    if (nextP > lastC.high) lastC.high = nextP;
+    if (nextP < lastC.low) lastC.low = nextP;
+    if (state.timeframe === '1D') {
+      lastC.volume = state.volShares;
+    } else {
+      lastC.volume = (lastC.volume || 0) + lotSize;
+    }
+    drawInteractiveMoomooChart();
   }
 }
 
