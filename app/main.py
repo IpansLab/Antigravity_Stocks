@@ -51,6 +51,11 @@ def get_dashboard(refresh: bool = Query(False)) -> Dict[str, Any]:
     return service.get_full_dashboard_payload(force_refresh=refresh)
 
 
+@app.get("/api/live_tick")
+def get_live_tick() -> Dict[str, Any]:
+    return service.fetcher.get_fast_live_tick()
+
+
 @app.post("/api/simulate")
 def simulate_what_if(req: WhatIfScenarioRequest) -> Dict[str, Any]:
     overrides: Dict[str, float] = {}

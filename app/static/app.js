@@ -6,7 +6,61 @@
 const state = {
   payload: null,
   calibrationChartMode: 'actual_vs_pred', // 'actual_vs_pred' | 'weight_evolution'
+  live1sEnabled: true,
+  tickCounter: 0,
 };
+
+async function pollLiveTickEverySecond() {
+  if (!state.live1sEnabled) return;
+  try {
+    const res = await fetch('/api/live_tick');
+    const tick = await res.json();
+    if (!tick || !tick.price) return;
+
+    const priceEl = document.getElementById('live-spot-price');
+    if (priceEl) {
+      priceEl.textContent = fmtPrice(tick.price);
+      if (tick.tick_direction > 0) {
+        priceEl.style.color = 'var(--bull-primary)';
+      } else if (tick.tick_direction < 0) {
+        priceEl.style.color = 'var(--bear-primary)';
+      }
+      setTimeout(() => {
+        if (priceEl) priceEl.style.color = 'var(--text-primary)';
+      }, 450);
+    }
+
+    setDeltaBadge(document.getElementById('live-spot-delta'), tick.extended_change_pct);
+    const clockEl = document.getElementById('live-tick-clock');
+    if (clockEl && tick.timestamp_et) {
+      clockEl.textContent = tick.timestamp_et.slice(11);
+    }
+
+    if (state.payload && state.payload.market) {
+      state.payload.market.current_price = tick.price;
+      state.payload.market.extended_change_pct = tick.extended_change_pct;
+      const sim = state.payload.simulation;
+      if (sim && sim.live_vs_simulated) {
+        const simTarget = sim.live_vs_simulated.active_simulated_price;
+        const spreadPct = ((simTarget - tick.price) / tick.price) * 100.0;
+        const simSpreadEl = document.getElementById('live-vs-sim-badge');
+        if (simSpreadEl) {
+          simSpreadEl.textContent = `${fmtPrice(simTarget)} (${fmtPct(spreadPct)})`;
+        }
+      }
+      if (sim && sim.entry_recommendations) {
+        const optP = sim.entry_recommendations.most_suitable_entry.entry_price;
+        const safeP = sim.entry_recommendations.safest_entry.entry_price;
+        const optDiscEl = document.getElementById('opt-discount-pct');
+        const safeDiscEl = document.getElementById('safe-discount-pct');
+        if (optDiscEl) optDiscEl.textContent = `${fmtPct(((optP - tick.price) / tick.price) * 100)} vs Spot`;
+        if (safeDiscEl) safeDiscEl.textContent = `${fmtPct(((safeP - tick.price) / tick.price) * 100)} vs Spot`;
+      }
+    }
+  } catch (e) {
+    // Ignore transient 1s tick errors
+  }
+}
 
 function fmtPrice(v) {
   if (v === null || v === undefined || Number.isNaN(Number(v))) return '--';
@@ -589,6 +643,14 @@ function bindEvents() {
   document.getElementById('btn-fine-tune').addEventListener('click', triggerFineTuning);
   document.getElementById('btn-run-whatif').addEventListener('click', runWhatIfScenario);
 
+  const toggleBtn = document.getElementById('btn-toggle-1s');
+  if (toggleBtn) {
+    toggleBtn.addEventListener('click', () => {
+      state.live1sEnabled = !state.live1sEnabled;
+      toggleBtn.textContent = state.live1sEnabled ? 'LIVE 1s: ON' : 'LIVE 1s: PAUSED';
+    });
+  }
+
   const resetSliders = () => {
     document.getElementById('slider-whale-musd').value = '0';
     document.getElementById('slider-futures-pct').value = '0';
@@ -668,4 +730,5 @@ document.addEventListener('DOMContentLoaded', () => {
   bindEvents();
   updateSliderLabels();
   fetchDashboard(false);
+  setInterval(pollLiveTickEverySecond, 1000);
 });

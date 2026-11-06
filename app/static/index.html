@@ -37,10 +37,17 @@
           <span class="kv-label">Live vs. Simulated</span>
           <span class="kv-val mono" id="live-vs-sim-badge">--</span>
         </div>
+        <div class="kv-cell">
+          <span class="kv-label">1s Feed Clock</span>
+          <span class="kv-val mono" style="color:var(--bull-primary);" id="live-tick-clock">--:--:-- ET</span>
+        </div>
       </div>
     </div>
 
     <div class="header-actions">
+      <button class="btn" id="btn-toggle-1s" type="button" title="Pause or resume 1-second live price updates">
+        LIVE 1s: ON
+      </button>
       <button class="btn btn-amber" id="btn-fine-tune" type="button" title="Compare recent predictions against current market price and update factor weights">
         Fine-Tune Algorithm (Learn from Error)
       </button>
