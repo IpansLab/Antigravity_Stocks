@@ -60,6 +60,7 @@ def get_dashboard(refresh: bool = Query(False)) -> Dict[str, Any]:
 
 
 @app.get("/api/live_tick")
+@app.get("/api/tick")
 def get_live_tick() -> Dict[str, Any]:
     return service.fetcher.get_fast_live_tick()
 
