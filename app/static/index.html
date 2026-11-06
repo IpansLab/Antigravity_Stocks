@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NVDA Multi-Factor Stock Tracker & Self-Tuning Price Simulator</title>
+  <meta name="description" content="Quantitative multi-factor price tracker, institutional whale monitor, overnight/market-open/1-week simulator, optimal entry point engine, and online error-tuning system for NVIDIA (NVDA)." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <!-- Sticky Top Command Header -->
+  <header class="top-header" id="top-command-bar">
+    <div class="brand-cluster">
+      <div class="ticker-identity">
+        <h1>NVDA Quant Terminal</h1>
+        <span class="ticker-exchange">NASDAQ · NVIDIA CORP</span>
+      </div>
+
+      <div class="live-quote-ribbon">
+        <div class="spot-price-block">
+          <span class="spot-price mono" id="live-spot-price">$0.00</span>
+          <span class="spot-delta mono delta-flat" id="live-spot-delta">0.00%</span>
+        </div>
+        <span class="session-tag" id="active-session-badge">LOADING</span>
+        <div class="kv-cell">
+          <span class="kv-label">Last Reg Close</span>
+          <span class="kv-val mono" id="last-reg-close-val">$0.00</span>
+        </div>
+        <div class="kv-cell">
+          <span class="kv-label">Intraday VWAP</span>
+          <span class="kv-val mono" id="intraday-vwap-val">$0.00</span>
+        </div>
+        <div class="kv-cell">
+          <span class="kv-label">Live vs. Simulated</span>
+          <span class="kv-val mono" id="live-vs-sim-badge">--</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <button class="btn btn-amber" id="btn-fine-tune" type="button" title="Compare recent predictions against current market price and update factor weights">
+        Fine-Tune Algorithm (Learn from Error)
+      </button>
+      <button class="btn" id="btn-refresh-data" type="button">
+        Refresh Live Feed
+      </button>
+    </div>
+  </header>
+
+  <main class="workspace-container">
+    <!-- Active Scenario Notification Banner -->
+    <div class="status-banner" id="scenario-status-banner">
+      <span id="scenario-banner-text">What-If Scenario Active</span>
+      <button class="btn" id="btn-clear-scenario" type="button">Reset to Live Baseline</button>
+    </div>
+
+    <!-- Top 4 Horizon Cards: Overnight, Market Open, Intraday Close, 1-Week Target -->
+    <section class="horizon-strip" aria-label="Multi-Horizon Price Predictions">
+      <div class="metric-panel" id="card-overnight">
+        <div class="metric-header">
+          <span class="metric-title">Overnight Market (20:00–04:00 ET)</span>
+          <span class="spot-delta mono" id="overnight-ret-badge">--</span>
+        </div>
+        <div class="metric-main-row">
+          <span class="metric-price mono" id="overnight-pred-price">$0.00</span>
+          <span class="mono" style="font-size:0.8rem;color:var(--text-secondary);" id="overnight-dollar-chg">--</span>
+        </div>
+        <div class="metric-band mono">
+          <span>68% Band: <strong id="overnight-band-68">--</strong></span>
+          <span>95%: <span id="overnight-band-95">--</span></span>
+        </div>
+        <p class="metric-driver" id="overnight-driver-note">Post-market whale blocks, NQ=F futures & TSMC lead.</p>
+      </div>
+
+      <div class="metric-panel" id="card-market-open">
+        <div class="metric-header">
+          <span class="metric-title">Market Open Prediction (09:30 ET)</span>
+          <span class="spot-delta mono" id="open-ret-badge">--</span>
+        </div>
+        <div class="metric-main-row">
+          <span class="metric-price mono" id="open-pred-price">$0.00</span>
+          <span class="mono" style="font-size:0.8rem;color:var(--text-secondary);" id="open-dollar-chg">--</span>
+        </div>
+        <div class="metric-band mono">
+          <span>68% Band: <strong id="open-band-68">--</strong></span>
+          <span>95%: <span id="open-band-95">--</span></span>
+        </div>
+        <p class="metric-driver" id="open-driver-note">Pre-market accumulation, institutional order flow & SMH.</p>
+      </div>
+
+      <div class="metric-panel" id="card-intraday-close">
+        <div class="metric-header">
+          <span class="metric-title">Session Close Prediction (16:00 ET)</span>
+          <span class="spot-delta mono" id="close-ret-badge">--</span>
+        </div>
+        <div class="metric-main-row">
+          <span class="metric-price mono" id="close-pred-price">$0.00</span>
+          <span class="mono" style="font-size:0.8rem;color:var(--text-secondary);" id="close-dollar-chg">--</span>
+        </div>
+        <div class="metric-band mono">
+          <span>68% Band: <strong id="close-band-68">--</strong></span>
+          <span>95%: <span id="close-band-95">--</span></span>
+        </div>
+        <p class="metric-driver" id="close-driver-note">Calibrated 5-factor drift + intraday VWAP institutional flow.</p>
+      </div>
+
+      <div class="metric-panel" id="card-weekly-target">
+        <div class="metric-header">
+          <span class="metric-title">1-Week Trend Target (5 Trading Days)</span>
+          <span class="spot-delta mono" id="week-ret-badge">--</span>
+        </div>
+        <div class="metric-main-row">
+          <span class="metric-price mono" id="week-pred-price">$0.00</span>
+          <span class="mono" style="font-size:0.8rem;color:var(--text-secondary);" id="week-bull-prob">Bull Prob: --</span>
+        </div>
+        <div class="metric-band mono">
+          <span>Expected 5D Range: <strong id="week-range-band">--</strong></span>
+        </div>
+        <p class="metric-driver" id="week-regime-label">Monte Carlo Jump-Diffusion (2,000 simulated paths).</p>
+      </div>
+    </section>
+
+    <!-- Primary Row: 1-Week Trajectory Fan Chart + Recommended Entry Points -->
+    <div class="primary-grid">
+      <!-- Left: 1-Week Trajectory Fan Chart + 5-Day Cards -->
+      <section class="section-panel" id="panel-weekly-chart">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <h2>1-Week (5-Trading-Day) Simulated Price Trajectory & Entry Zones</h2>
+            <p class="panel-subtitle">2,000 Monte Carlo Jump-Diffusion paths with 68% / 90% confidence bands, Most Suitable Entry, and Safest Entry levels</p>
+          </div>
+          <span class="session-tag mono" id="weekly-trend-badge">CALCULATING</span>
+        </div>
+        <div class="panel-body">
+          <div class="chart-canvas-wrap">
+            <canvas id="canvas-weekly-fan"></canvas>
+          </div>
+          <div class="chart-legend-row">
+            <span class="legend-item"><span class="legend-swatch" style="background:hsl(158, 78%, 42%);"></span>Simulated Median Path</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:hsla(158, 78%, 42%, 0.35);height:8px;"></span>68% Confidence Band</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:hsl(38, 92%, 54%);"></span>Most Suitable Entry (Optimal Profit)</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:hsl(196, 86%, 54%);"></span>Safest Entry (Margin of Safety)</span>
+            <span class="legend-item"><span class="legend-swatch" style="background:hsl(350, 82%, 58%);"></span>Stop-Loss Floor</span>
+          </div>
+
+          <div class="five-day-strip" id="five-day-cards-container">
+            <!-- Populated dynamically -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Most Suitable Entry Point & Safest Entry Point Engine -->
+      <section class="section-panel" id="panel-entry-optimizer">
+        <div class="panel-header">
+          <div class="panel-title-group">
+            <h2>Profit & Safety Entry Point Recommendations</h2>
+            <p class="panel-subtitle">Calculated from 1-week pullback distribution, Volume Profile POC, and Reward-to-Risk optimization</p>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="entry-cards-stack">
+            <!-- Card 1: Most Suitable Entry Point -->
+            <div class="entry-card" id="box-optimal-entry">
+              <div class="entry-card-top">
+                <div>
+                  <span class="entry-badge badge-optimal">Most Suitable Entry Point · Optimal Profit</span>
+                  <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;" id="opt-timing-window">--</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="entry-price-hero mono" id="opt-entry-price">$0.00</div>
+                  <span class="mono" style="font-size:0.76rem;color:var(--text-secondary);" id="opt-discount-pct">-- vs Spot</span>
+                </div>
+              </div>
+
+              <div class="entry-metrics-grid">
+                <div class="kv-cell">
+                  <span class="kv-label">Primary Target</span>
+                  <span class="kv-val mono" style="color:var(--bull-primary);" id="opt-target-1">$0.00</span>
+                </div>
+                <div class="kv-cell">
+                  <span class="kv-label">Stretch Target</span>
+                  <span class="kv-val mono" style="color:var(--bull-primary);" id="opt-target-2">$0.00</span>
+                </div>
+                <div class="kv-cell">
+                  <span class="kv-label">Stop-Loss</span>
+                  <span class="kv-val mono" style="color:var(--bear-primary);" id="opt-stop-loss">$0.00</span>
+                </div>
+                <div class="kv-cell">
+                  <span class="kv-label">Fill Probability</span>
+                  <span class="kv-val mono" id="opt-fill-prob">0%</span>
+                </div>
+                <div class="kv-cell">
+                  <span class="kv-label">Expected Gain</span>
+                  <span class="kv-val mono" style="color:var(--bull-primary);" id="opt-exp-gain">+0.0%</span>
+                </div>
+                <div class="kv-cell">
+                  <span class="kv-label">Reward : Risk</span>
+                  <span class="kv-val mono" style="color:var(--amber-primary);" id="opt-rr-ratio">0.0:1</span>
+                </div>
+              </div>
+              <p class="entry-rationale" id="opt-rationale">--</p>
+            </div>
+
+            <!-- Card 2: Safest Entry Point -->
+            <div class="entry-card" id="box-safe-entry">
+              <div class="entry-card-top">
+                <div>
+                  <span class="entry-badge badge-safe">Safest Entry Point · Maximum Margin of Safety</span>
+                  <div style="font-size:0.75rem;color:var(--text-muted);margin-top:4px;" id="safe-timing-window">--</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="entry-price-hero mono" id="safe-entry-price">$0.00</div>
+                  <span class="mono" style="font-size:0.76rem;color:var(--text-secondary);" id="safe-discount-pct">-- vs Spot</span>
+                </div>
+              </div>
+
+              <div class="entry-metrics-grid">
+                <div class="kv-cell">
+                  <span class="kv-label">Rebound Target</span>
+                  <span class="kv-val mono" style="color:var(--bull-primary);" id="safe-target">$0.00</span>
+                </div>
+                <div class="kv-cell">
+                  <span class="kv-label">Protective Stop</span>
+                  <span class="kv-val mono" style="color:var(--bear-primary);" id="safe-stop">$0.00</span>
+                </div>
+                <div class="kv-cell">
+                  <span class="kv-label">Safety Score</span>
+                  <span class="kv-val mono" style="color:var(--cyan-primary);" id="safe-score">0 / 100</span>
+                </div>
+                <div class="kv-cell">
+                  <span class="kv-label">5D Fill Prob</span>
+                  <span class="kv-val mono" id="safe-fill-prob">0%</span>
+                </div>
+                <div class="kv-cell">
+                  <span class="kv-label">Target Gain</span>
+                  <span class="kv-val mono" style="color:var(--bull-primary);" id="safe-exp-gain">+0.0%</span>
+                </div>
+                <div class="kv-cell">
+                  <span class="kv-label">Max Risk to Stop</span>
+                  <span class="kv-val mono" id="safe-max-risk">-0.0%</span>
+                </div>
+              </div>
+              <p class="entry-rationale" id="safe-rationale">--</p>
+            </div>
+
+            <!-- 3-Tranche Scaling Ladder -->
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <span class="metric-title">3-Tranche Capital Scaling Plan</span>
+                <span class="mono" style="font-size:0.76rem;color:var(--amber-primary);" id="blended-entry-summary">Blended Avg: $0.00</span>
+              </div>
+              <table class="tranche-table" id="tranche-plan-table">
+                <thead>
+                  <tr>
+                    <th>Tranche</th>
+                    <th>Limit Price</th>
+                    <th>Fill Prob</th>
+                    <th>Execution Role</th>
+                  </tr>
+                </thead>
+                <tbody id="tranche-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Secondary Row: Multi-Factor Attribution + What-If Simulator AND Self-Tuning Calibration + Whale Monitor -->
+    <div class="secondary-grid">
+      <!-- Left Column: Multi-Factor Breakdown + Interactive What-If Whale/Market Simulator -->
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <section class="section-panel" id="panel-factors">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h2>Multi-Factor Price Influence Attribution</h2>
+              <p class="panel-subtitle">Real-time normalized scores (-1.00 to +1.00) weighted by self-tuned model coefficients</p>
+            </div>
+            <span class="spot-delta mono" id="composite-score-badge">Score: 0.000</span>
+          </div>
+          <div class="panel-body">
+            <div class="factor-list" id="factor-breakdown-list">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </section>
+
+        <section class="section-panel" id="panel-what-if">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h2>Interactive "What-If" Factor & Whale Purchase Simulator</h2>
+              <p class="panel-subtitle">Inject institutional block purchases, overnight futures gaps, or sector shocks to test NVDA price impact</p>
+            </div>
+            <button class="btn" id="btn-reset-sliders" type="button">Reset Sliders</button>
+          </div>
+          <div class="panel-body">
+            <div class="simulator-controls">
+              <div class="slider-group">
+                <div class="slider-label-row">
+                  <label for="slider-whale-musd">Firm / Whale High-Volume Stock Purchase or Sale ($M USD)</label>
+                  <span class="mono" id="val-whale-musd">$0M (0 shares)</span>
+                </div>
+                <input class="slider-input" type="range" id="slider-whale-musd" min="-1500" max="1500" step="50" value="0" />
+                <span class="slider-hint">Simulates a major institution or whale buying (+) or selling (-) up to $1.5B of NVDA stock.</span>
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-label-row">
+                  <label for="slider-futures-pct">Overnight Nasdaq-100 Futures (NQ=F) Move (%)</label>
+                  <span class="mono" id="val-futures-pct">0.0%</span>
+                </div>
+                <input class="slider-input" type="range" id="slider-futures-pct" min="-4.0" max="4.0" step="0.1" value="0" />
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-label-row">
+                  <label for="slider-sector-pct">Semiconductor Peers (SMH / TSMC / AMD) Shock (%)</label>
+                  <span class="mono" id="val-sector-pct">0.0%</span>
+                </div>
+                <input class="slider-input" type="range" id="slider-sector-pct" min="-6.0" max="6.0" step="0.2" value="0" />
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-label-row">
+                  <label for="slider-vix-pct">Macro Volatility (^VIX) Spike / Crush (%)</label>
+                  <span class="mono" id="val-vix-pct">0.0%</span>
+                </div>
+                <input class="slider-input" type="range" id="slider-vix-pct" min="-25" max="25" step="1" value="0" />
+              </div>
+
+              <div class="slider-group">
+                <div class="slider-label-row">
+                  <label for="slider-sentiment">News & Catalyst Sentiment Shift</label>
+                  <span class="mono" id="val-sentiment">0.00</span>
+                </div>
+                <input class="slider-input" type="range" id="slider-sentiment" min="-1.0" max="1.0" step="0.05" value="0" />
+              </div>
+
+              <button class="btn btn-primary" id="btn-run-whatif" type="button" style="align-self:flex-start;">
+                Run Scenario Simulation
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Right Column: Adaptive Self-Tuning Engine + Whale & Insider Activity Monitor -->
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <section class="section-panel" id="panel-calibration">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h2>Adaptive Self-Tuning & Prediction vs. Actual Comparison</h2>
+              <p class="panel-subtitle">Continuously learns factor weights and drift bias from prediction errors over time</p>
+            </div>
+            <div class="tab-group">
+              <button class="tab-btn active" id="tab-actual-vs-pred" type="button">Actual vs. Predicted</button>
+              <button class="tab-btn" id="tab-weight-evolution" type="button">Weight Evolution</button>
+            </div>
+          </div>
+          <div class="panel-body">
+            <div class="calibration-stats-grid">
+              <div class="whale-kpi-box">
+                <span class="kv-label">Tuned Rolling MAE</span>
+                <div class="kv-val mono" style="color:var(--bull-primary);margin-top:3px;" id="cal-rolling-mae">$0.00</div>
+                <span class="slider-hint" id="cal-baseline-comp">vs $0.00 static</span>
+              </div>
+              <div class="whale-kpi-box">
+                <span class="kv-label">Directional Hit Rate</span>
+                <div class="kv-val mono" style="color:var(--amber-primary);margin-top:3px;" id="cal-hit-rate">0.0%</div>
+                <span class="slider-hint" id="cal-samples-count">0 samples</span>
+              </div>
+              <div class="whale-kpi-box">
+                <span class="kv-label">Rolling MAPE</span>
+                <div class="kv-val mono" style="margin-top:3px;" id="cal-rolling-mape">0.00%</div>
+                <span class="slider-hint">Mean % Error</span>
+              </div>
+              <div class="whale-kpi-box">
+                <span class="kv-label">Learned Drift Bias</span>
+                <div class="kv-val mono" style="margin-top:3px;" id="cal-drift-bias">0.00%</div>
+                <span class="slider-hint" id="cal-vol-mult">Vol scale: 1.00x</span>
+              </div>
+            </div>
+
+            <div class="chart-canvas-wrap" style="height:265px;">
+              <canvas id="canvas-calibration-chart"></canvas>
+            </div>
+            <p class="metric-driver" style="margin-top:10px;" id="cal-latest-notes">--</p>
+          </div>
+        </section>
+
+        <section class="section-panel" id="panel-whale-monitor">
+          <div class="panel-header">
+            <div class="panel-title-group">
+              <h2>High-Volume Whale, Institutional (13F) & Insider (Form 4) Monitor</h2>
+              <p class="panel-subtitle">Tracks large block volume spikes, top institutional fund additions, and executive filings</p>
+            </div>
+            <span class="session-tag mono" id="whale-rvol-badge">RVOL: 1.00x</span>
+          </div>
+          <div class="panel-body">
+            <div class="whale-kpi-row">
+              <div class="whale-kpi-box">
+                <span class="kv-label">10D Block Accumulation</span>
+                <div class="kv-val mono" style="color:var(--bull-primary);margin-top:3px;" id="whale-accum-val">$0.0B</div>
+              </div>
+              <div class="whale-kpi-box">
+                <span class="kv-label">10D Block Distribution</span>
+                <div class="kv-val mono" style="color:var(--bear-primary);margin-top:3px;" id="whale-distrib-val">$0.0B</div>
+              </div>
+              <div class="whale-kpi-box">
+                <span class="kv-label">Top-10 13F Net Change</span>
+                <div class="kv-val mono" style="color:var(--bull-primary);margin-top:3px;" id="whale-13f-chg">+0.00%</div>
+              </div>
+            </div>
+
+            <div class="event-feed" id="whale-events-feed">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

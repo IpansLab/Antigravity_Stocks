@@ -1,0 +1,715 @@
+/* ==========================================================================
+   NVDA Quantitative Multi-Factor Tracker & Self-Tuning Simulator
+   Design System: Precision Financial Workspace (HSL Curated Slate & Emerald)
+   ========================================================================== */
+
+:root {
+  --bg-canvas: hsl(216, 24%, 6%);
+  --bg-surface: hsl(215, 21%, 9.5%);
+  --bg-elevated: hsl(215, 19%, 13%);
+  --bg-subtle: hsl(215, 18%, 11%);
+  --bg-hover: hsl(215, 18%, 15%);
+
+  --border-subtle: hsl(215, 15%, 17%);
+  --border-strong: hsl(215, 14%, 24%);
+
+  --text-primary: hsl(210, 22%, 95%);
+  --text-secondary: hsl(214, 14%, 70%);
+  --text-muted: hsl(215, 12%, 50%);
+
+  --bull-primary: hsl(158, 78%, 42%);
+  --bull-soft: hsla(158, 78%, 42%, 0.13);
+  --bear-primary: hsl(350, 82%, 58%);
+  --bear-soft: hsla(350, 82%, 58%, 0.13);
+  --amber-primary: hsl(38, 92%, 54%);
+  --amber-soft: hsla(38, 92%, 54%, 0.13);
+  --cyan-primary: hsl(196, 86%, 54%);
+  --cyan-soft: hsla(196, 86%, 54%, 0.13);
+
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* Top Command Header */
+.top-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 14px 24px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 40;
+}
+
+.brand-cluster {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ticker-identity {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.ticker-identity h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.ticker-exchange {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.live-quote-ribbon {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding-left: 16px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.spot-price-block {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.spot-price {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.spot-delta {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+}
+
+.delta-up {
+  color: var(--bull-primary);
+  background: var(--bull-soft);
+}
+
+.delta-down {
+  color: var(--bear-primary);
+  background: var(--bear-soft);
+}
+
+.delta-flat {
+  color: var(--amber-primary);
+  background: var(--amber-soft);
+}
+
+.session-tag {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+
+.btn:hover {
+  background-color: var(--bg-hover);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  background-color: var(--bull-primary);
+  border-color: var(--bull-primary);
+  color: hsl(216, 28%, 5%);
+}
+
+.btn-primary:hover {
+  background-color: hsl(158, 78%, 47%);
+}
+
+.btn-amber {
+  background-color: var(--amber-soft);
+  border-color: hsla(38, 92%, 54%, 0.45);
+  color: var(--amber-primary);
+}
+
+.btn-amber:hover {
+  background-color: hsla(38, 92%, 54%, 0.22);
+}
+
+/* Main Workspace Layout */
+.workspace-container {
+  max-width: 1620px;
+  margin: 0 auto;
+  padding: 18px 24px 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Top Horizon Strip (Overnight, Market Open, Intraday Close, 1-Week Target, Live vs Sim) */
+.horizon-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+
+.metric-panel {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 15px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.metric-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.metric-title {
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+}
+
+.metric-main-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.metric-price {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metric-band {
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  display: flex;
+  justify-content: space-between;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.metric-driver {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  line-height: 1.38;
+}
+
+/* Primary 2-Column Analytical Grid */
+.primary-grid {
+  display: grid;
+  grid-template-columns: 1.65fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.section-panel {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  background-color: var(--bg-subtle);
+}
+
+.panel-title-group h2 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.panel-subtitle {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.panel-body {
+  padding: 18px;
+}
+
+/* Chart Canvas Wrappers */
+.chart-canvas-wrap {
+  position: relative;
+  width: 100%;
+  height: 360px;
+  background-color: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+}
+
+.chart-canvas-wrap canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.chart-legend-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+/* 5-Day Forecast Strip inside Left Column */
+.five-day-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.day-card {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.day-card-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.day-card-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+}
+
+/* Entry Point Recommendation Cards */
+.entry-cards-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.entry-card {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  padding: 15px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.entry-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.entry-badge {
+  font-family: var(--font-mono);
+  font-size: 0.71rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.badge-optimal {
+  background-color: var(--bull-soft);
+  color: var(--bull-primary);
+}
+
+.badge-safe {
+  background-color: var(--cyan-soft);
+  color: var(--cyan-primary);
+}
+
+.entry-price-hero {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.entry-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.kv-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kv-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.kv-val {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.entry-rationale {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.tranche-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+  margin-top: 6px;
+}
+
+.tranche-table th,
+.tranche-table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tranche-table th {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+/* Secondary 2-Column Grid: Factors & What-If Simulator + Whale & Self-Tuning */
+.secondary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+/* Multi-Factor Breakdown List */
+.factor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.factor-item {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+}
+
+.factor-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.factor-name {
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+
+.factor-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+}
+
+.score-meter-track {
+  position: relative;
+  height: 7px;
+  background-color: var(--bg-canvas);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  border: 1px solid var(--border-subtle);
+}
+
+.score-meter-center {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background-color: var(--border-strong);
+}
+
+.score-meter-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  transition: width 0.25s ease, left 0.25s ease;
+}
+
+.driver-bullets {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* Interactive What-If Scenario Simulator */
+.simulator-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.slider-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.slider-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.slider-input {
+  width: 100%;
+  accent-color: var(--bull-primary);
+  cursor: pointer;
+}
+
+.slider-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* Whale & Institutional Feed */
+.whale-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.whale-kpi-box {
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.event-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 330px;
+  overflow-y: auto;
+}
+
+.event-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background-color: var(--bg-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+}
+
+.event-tag {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+
+/* Self-Tuning Calibration & Live vs Predicted Comparison */
+.calibration-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.tab-group {
+  display: inline-flex;
+  background-color: var(--bg-canvas);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  background-color: var(--bg-elevated);
+  color: var(--text-primary);
+}
+
+.status-banner {
+  display: none;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background-color: var(--amber-soft);
+  border: 1px solid hsla(38, 92%, 54%, 0.4);
+  color: var(--amber-primary);
+  font-size: 0.8rem;
+  margin-bottom: 12px;
+}
+
+.status-banner.visible {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (max-width: 1200px) {
+  .horizon-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .primary-grid,
+  .secondary-grid {
+    grid-template-columns: 1fr;
+  }
+  .five-day-strip {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 720px) {
+  .horizon-strip,
+  .five-day-strip,
+  .calibration-stats-grid,
+  .whale-kpi-row {
+    grid-template-columns: 1fr;
+  }
+}
