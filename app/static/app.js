@@ -585,19 +585,36 @@ function drawInteractiveMoomooChart() {
     drawZoneLevel(stopPrice, 'hsl(350, 82%, 58%)', null, 'STOP');
   }
 
-  // Current Spot Price Dotted Line (Moomoo orange dashed line)
+  // Current Spot Price Dotted Line + TradingView 2-Line Price & Bar Countdown Badge
   const ySpot = yOfPrice(spotPrice);
   if (ySpot >= priceTop && ySpot <= priceBottom) {
+    const now = new Date();
+    const utcSec = now.getUTCSeconds();
+    const utcMin = now.getUTCMinutes();
+    let cdStr = 'RTH';
+    if (state.timeframe === '1m') {
+      cdStr = '00:' + String((60 - utcSec) % 60).padStart(2, '0');
+    } else if (state.timeframe === '5m') {
+      const tot = (4 - (utcMin % 5)) * 60 + (60 - utcSec);
+      cdStr = String(Math.floor(tot / 60)).padStart(2, '0') + ':' + String(tot % 60).padStart(2, '0');
+    } else if (state.timeframe === '15m') {
+      const tot = (14 - (utcMin % 15)) * 60 + (60 - utcSec);
+      cdStr = String(Math.floor(tot / 60)).padStart(2, '0') + ':' + String(tot % 60).padStart(2, '0');
+    }
+
     ctx.save();
-    ctx.strokeStyle = 'hsla(28, 95%, 58%, 0.75)';
+    ctx.strokeStyle = 'hsla(158, 78%, 43%, 0.85)';
     ctx.setLineDash([2, 3]);
     ctx.beginPath();
     ctx.moveTo(padLeft, ySpot);
     ctx.lineTo(W - padRight, ySpot);
     ctx.stroke();
-    ctx.fillStyle = 'hsl(28, 95%, 58%)';
+    ctx.fillStyle = 'hsl(158, 78%, 43%)';
+    ctx.fillRect(W - padRight + 2, ySpot - 13, 86, 28);
+    ctx.fillStyle = '#0f172a';
     ctx.font = '700 10px "JetBrains Mono", monospace';
-    ctx.fillText(`SPOT $${spotPrice.toFixed(2)}`, W - padRight + 5, ySpot + 3);
+    ctx.fillText(`$${spotPrice.toFixed(2)}`, W - padRight + 5, ySpot - 2);
+    ctx.fillText(`⏱ ${cdStr}`, W - padRight + 5, ySpot + 10);
     ctx.restore();
   }
 
