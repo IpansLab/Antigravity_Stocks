@@ -110,23 +110,8 @@ async function pollLiveTickEverySecond() {
   const lotSize = Math.floor(800 + Math.random() * 4700);
   state.volShares = (state.volShares || 107000000) + lotSize;
 
-  let nextP = prevP;
-  const shouldMove = (Math.random() < 0.65) || (Math.abs(prevP - anchor) > 0.06);
-  if (shouldMove) {
-    const drift = (anchor - prevP) * 0.32;
-    const centTicks = [-0.03, -0.02, -0.01, -0.01, 0, 0.01, 0.01, 0.02, 0.03];
-    const shock = centTicks[Math.floor(Math.random() * centTicks.length)];
-    let cand = +(prevP + drift + shock).toFixed(2);
-    cand = Math.max(anchor - 0.10, Math.min(anchor + 0.10, cand));
-    cand = Math.max(state.dayLow, Math.min(state.dayHigh, cand));
-    nextP = cand;
-  }
-
-  if (nextP > state.dayHigh) state.dayHigh = nextP;
-  if (nextP < state.dayLow) state.dayLow = nextP;
-
-  const dir = nextP > prevP ? 1 : nextP < prevP ? -1 : 0;
-  state.spotPrice = nextP;
+  let nextP = state.spotPrice;
+  const dir = 0;
   if (state.payload && state.payload.market) {
     state.payload.market.current_price = nextP;
   }
