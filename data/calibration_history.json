@@ -1,24 +1,24 @@
 {
-  "updated_at": "2026-11-07T00:56:56.419298+00:00",
+  "updated_at": "2026-11-07T08:28:59.791885+00:00",
   "current_calibration_state": {
-    "id": 12,
-    "updated_at": "2026-11-07T00:56:54.457830+00:00",
+    "id": 13,
+    "updated_at": "2026-11-07T08:28:59.075104+00:00",
     "step_type": "LIVE_ERROR_FINE_TUNE",
-    "bias_drift": -0.00423,
+    "bias_drift": -0.003674,
     "vol_multiplier": 1.0862,
     "learning_rate": 0.11,
-    "rolling_mae": 2.85,
-    "rolling_mape": 1.44,
+    "rolling_mae": 2.8,
+    "rolling_mape": 1.42,
     "directional_accuracy": 70.8,
     "baseline_mae": 5.32,
-    "samples_evaluated": 88,
-    "notes": "Live fine-tune at NVDA $186.64 (residual -1.05%): updated weights & drift bias (-0.423%).",
+    "samples_evaluated": 89,
+    "notes": "Live fine-tune at NVDA $186.64 (residual -0.15%): updated weights & drift bias (-0.367%).",
     "weights": {
-      "whale_institutional": 0.1767,
-      "overnight_premarket": 0.3912,
-      "sector_peers": 0.2037,
-      "macro_regime": 0.0985,
-      "technical_sentiment": 0.1299
+      "whale_institutional": 0.1793,
+      "overnight_premarket": 0.3854,
+      "sector_peers": 0.2015,
+      "macro_regime": 0.1,
+      "technical_sentiment": 0.1337
     }
   },
   "weight_evolution_history": [
@@ -272,6 +272,27 @@
         "sector_peers": 0.2037,
         "macro_regime": 0.0985,
         "technical_sentiment": 0.1299
+      }
+    },
+    {
+      "id": 13,
+      "updated_at": "2026-11-07T08:28:59.075104+00:00",
+      "step_type": "LIVE_ERROR_FINE_TUNE",
+      "bias_drift": -0.003674,
+      "vol_multiplier": 1.0862,
+      "learning_rate": 0.11,
+      "rolling_mae": 2.8,
+      "rolling_mape": 1.42,
+      "directional_accuracy": 70.8,
+      "baseline_mae": 5.32,
+      "samples_evaluated": 89,
+      "notes": "Live fine-tune at NVDA $186.64 (residual -0.15%): updated weights & drift bias (-0.367%).",
+      "weights": {
+        "whale_institutional": 0.1793,
+        "overnight_premarket": 0.3854,
+        "sector_peers": 0.2015,
+        "macro_regime": 0.1,
+        "technical_sentiment": 0.1337
       }
     }
   ],
