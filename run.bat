@@ -16,12 +16,14 @@ if %errorlevel% neq 0 (
 
 :: Create venv if not exists
 if not exist .venv (
-    echo [*] Creating virtual environment (.venv)...
+    echo [*] Creating virtual environment .venv...
     python -m venv .venv
 )
 
 :: Activate venv
-call .venv\Scripts\activate.bat
+if exist .venv\Scripts\activate.bat (
+    call .venv\Scripts\activate.bat
+)
 
 :: Install requirements
 echo [*] Checking and installing dependencies...
