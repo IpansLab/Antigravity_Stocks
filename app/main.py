@@ -50,6 +50,8 @@ class CalibrateRequest(BaseModel):
 
 
 @app.get("/")
+@app.get("/terminal")
+@app.get("/nvda_quant_terminal.html")
 def serve_index() -> FileResponse:
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
