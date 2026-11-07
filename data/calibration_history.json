@@ -1,24 +1,24 @@
 {
-  "updated_at": "2026-11-06T19:58:46.201202+00:00",
+  "updated_at": "2026-11-07T00:56:56.419298+00:00",
   "current_calibration_state": {
-    "id": 11,
-    "updated_at": "2026-11-06T19:58:45.340284+00:00",
+    "id": 12,
+    "updated_at": "2026-11-07T00:56:54.457830+00:00",
     "step_type": "LIVE_ERROR_FINE_TUNE",
-    "bias_drift": -0.00433,
+    "bias_drift": -0.00423,
     "vol_multiplier": 1.0862,
     "learning_rate": 0.11,
-    "rolling_mae": 2.97,
-    "rolling_mape": 1.49,
-    "directional_accuracy": 75.0,
+    "rolling_mae": 2.85,
+    "rolling_mape": 1.44,
+    "directional_accuracy": 70.8,
     "baseline_mae": 5.32,
-    "samples_evaluated": 87,
-    "notes": "Live fine-tune at NVDA $188.29 (residual -0.57%): updated weights & drift bias (-0.433%).",
+    "samples_evaluated": 88,
+    "notes": "Live fine-tune at NVDA $186.64 (residual -1.05%): updated weights & drift bias (-0.423%).",
     "weights": {
-      "whale_institutional": 0.1591,
-      "overnight_premarket": 0.4285,
-      "sector_peers": 0.2167,
-      "macro_regime": 0.0912,
-      "technical_sentiment": 0.1044
+      "whale_institutional": 0.1767,
+      "overnight_premarket": 0.3912,
+      "sector_peers": 0.2037,
+      "macro_regime": 0.0985,
+      "technical_sentiment": 0.1299
     }
   },
   "weight_evolution_history": [
@@ -252,21 +252,30 @@
         "macro_regime": 0.0912,
         "technical_sentiment": 0.1044
       }
+    },
+    {
+      "id": 12,
+      "updated_at": "2026-11-07T00:56:54.457830+00:00",
+      "step_type": "LIVE_ERROR_FINE_TUNE",
+      "bias_drift": -0.00423,
+      "vol_multiplier": 1.0862,
+      "learning_rate": 0.11,
+      "rolling_mae": 2.85,
+      "rolling_mape": 1.44,
+      "directional_accuracy": 70.8,
+      "baseline_mae": 5.32,
+      "samples_evaluated": 88,
+      "notes": "Live fine-tune at NVDA $186.64 (residual -1.05%): updated weights & drift bias (-0.423%).",
+      "weights": {
+        "whale_institutional": 0.1767,
+        "overnight_premarket": 0.3912,
+        "sector_peers": 0.2037,
+        "macro_regime": 0.0985,
+        "technical_sentiment": 0.1299
+      }
     }
   ],
   "recent_predictions_vs_actuals": [
-    {
-      "date": "2026-10-21",
-      "horizon": "DAILY_CLOSE",
-      "base_price": 216.47,
-      "predicted_price": 217.92,
-      "actual_price": 221.97,
-      "low_68": 215.19,
-      "high_68": 220.66,
-      "abs_error": 4.05,
-      "pct_error": 1.82,
-      "direction_correct": true
-    },
     {
       "date": "2026-10-22",
       "horizon": "DAILY_CLOSE",
