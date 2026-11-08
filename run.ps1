@@ -26,8 +26,8 @@ if (-not (Test-Path $venvPython)) {
 Write-Host "[*] Checking and installing dependencies..." -ForegroundColor Yellow
 & $venvPython -m pip install -r requirements.txt --quiet
 
-# Sync latest database and calibration history from GitHub
-Write-Host "[*] Updating local database from GitHub cloud..." -ForegroundColor Cyan
+# Sync latest database, calibration history, and terminal UI from GitHub (no Git required)
+Write-Host "[*] Updating local database and terminal UI from GitHub cloud..." -ForegroundColor Cyan
 if (-not (Test-Path "data")) {
     New-Item -ItemType Directory -Path "data" | Out-Null
 }
@@ -35,9 +35,11 @@ try {
     Invoke-WebRequest -Uri "https://raw.githubusercontent.com/IpansLab/Antigravity_Stocks/main/data/nvda_tracker.db" -OutFile "data/nvda_tracker.db" -UseBasicParsing -ErrorAction Stop
     Invoke-WebRequest -Uri "https://raw.githubusercontent.com/IpansLab/Antigravity_Stocks/main/data/calibration_history.json" -OutFile "data/calibration_history.json" -UseBasicParsing -ErrorAction Stop
     Invoke-WebRequest -Uri "https://raw.githubusercontent.com/IpansLab/Antigravity_Stocks/main/data/latest_forecast.json" -OutFile "data/latest_forecast.json" -UseBasicParsing -ErrorAction Stop
-    Write-Host "[SUCCESS] Local database synced with latest GitHub data!" -ForegroundColor Green
+    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/IpansLab/Antigravity_Stocks/main/app/static/index.html" -OutFile "app/static/index.html" -UseBasicParsing -ErrorAction Stop
+    Invoke-WebRequest -Uri "https://raw.githubusercontent.com/IpansLab/Antigravity_Stocks/main/nvda_quant_terminal.html" -OutFile "nvda_quant_terminal.html" -UseBasicParsing -ErrorAction Stop
+    Write-Host "[SUCCESS] Local database & UI synced with latest GitHub data!" -ForegroundColor Green
 } catch {
-    Write-Host "[WARN] Could not reach GitHub. Using existing local database." -ForegroundColor Yellow
+    Write-Host "[WARN] Could not reach GitHub. Using existing local files." -ForegroundColor Yellow
 }
 
 # Launch terminal server
