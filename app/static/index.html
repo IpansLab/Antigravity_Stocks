@@ -14,10 +14,10 @@
       <div>
         <div class="flex items-center gap-2">
           <h1 class="text-lg font-bold tracking-tight text-[var(--foreground)]">NVDA · NVIDIA CORP</h1>
-          <span class="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 font-semibold" id="hdr-session">REGULAR</span>
+          <span class="text-xs font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold" id="hdr-session">WEEKEND (CLOSED)</span>
           <span class="text-xs font-mono px-2 py-0.5 rounded bg-sky-500/15 text-sky-400 font-semibold" id="hdr-feed-source">● TV / NMS SYNC</span>
         </div>
-        <p class="text-xs text-[var(--muted-foreground)] mt-0.5 font-mono" id="hdr-timestamp">NASDAQ · Market Open · 2026-11-06 13:06:39 ET</p>
+        <p class="text-xs text-[var(--muted-foreground)] mt-0.5 font-mono" id="hdr-timestamp">NASDAQ · Market Closed (Weekend) · Nov 08, 2026</p>
       </div>
 
       <div class="flex flex-wrap items-center gap-5 pl-4 border-l border-[var(--border)]">
@@ -25,7 +25,7 @@
           <div class="flex items-baseline gap-1.5">
             <span class="text-2xl font-bold font-mono text-emerald-500" id="hdr-spot">186.43</span>
             <span class="text-xs font-mono text-[var(--muted-foreground)]">USD</span>
-            <button id="btn-edit-spot" type="button" class="ml-1.5 px-2 py-0.5 rounded text-xs font-mono font-bold bg-[var(--background)] border border-[var(--border)] text-sky-400 hover:border-sky-400 cursor-pointer" title="Directly sync or set exact spot price to match your live broker (e.g. 186.43)">✏ Set</button>
+            <span class="text-[11px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold" id="hdr-auto-badge">● Auto</span>
           </div>
           <div class="text-xs font-mono font-semibold text-emerald-500" id="hdr-delta">+4.83 (+2.66%)</div>
         </div>
@@ -64,9 +64,6 @@
     </div>
 
     <div class="flex items-center gap-2">
-      <button id="btn-sync-tv-price" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition cursor-pointer" title="Quick-align spot price with TradingView (186.43)">
-        Align TV (186.43)
-      </button>
       <button id="btn-sync-now" type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-sky-500/15 text-sky-400 border border-sky-500/30 hover:bg-sky-500/25 transition cursor-pointer" title="Force immediate resync with exchange quote">
         ⟳ Sync Exchange
       </button>
@@ -1452,6 +1449,74 @@ function getBarCountdownString(tf) {
   }
 }
 
+
+// --- Real-Time Market Session & Dynamic Clock Formatting ---
+function getMarketSessionInfo(dateObj = new Date()) {
+  const etFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+    hour12: false
+  });
+  const parts = etFormatter.formatToParts(dateObj);
+  const pMap = {};
+  parts.forEach(p => pMap[p.type] = p.value);
+
+  const weekday = pMap.weekday; // 'Sat', 'Sun', 'Mon', etc.
+  const hour = parseInt(pMap.hour, 10);
+  const minute = parseInt(pMap.minute, 10);
+  const sec = pMap.second || '00';
+  const minOfDay = hour * 60 + minute;
+
+  const isWeekend = (weekday === 'Sat' || weekday === 'Sun');
+  let sessionName = 'CLOSED';
+  let badgeClass = 'text-xs font-mono px-2 py-0.5 rounded bg-slate-500/15 text-slate-400 border border-slate-500/30 font-semibold';
+  let statusText = 'Market Closed';
+
+  if (isWeekend) {
+    sessionName = 'WEEKEND (CLOSED)';
+    badgeClass = 'text-xs font-mono px-2 py-0.5 rounded bg-amber-500/15 text-amber-400 border border-amber-500/30 font-semibold';
+    statusText = 'Market Closed (Weekend)';
+  } else if (minOfDay >= 4 * 60 && minOfDay < 9 * 60 + 30) {
+    sessionName = 'PRE-MARKET';
+    badgeClass = 'text-xs font-mono px-2 py-0.5 rounded bg-sky-500/15 text-sky-400 border border-sky-500/30 font-semibold';
+    statusText = 'Pre-Market Session';
+  } else if (minOfDay >= 9 * 60 + 30 && minOfDay < 16 * 60) {
+    sessionName = 'REGULAR';
+    badgeClass = 'text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 border border-emerald-500/30 font-semibold';
+    statusText = 'Market Open';
+  } else if (minOfDay >= 16 * 60 && minOfDay < 20 * 60) {
+    sessionName = 'AFTER-HOURS';
+    badgeClass = 'text-xs font-mono px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 font-semibold';
+    statusText = 'Post-Market Extended';
+  } else {
+    sessionName = 'OVERNIGHT';
+    badgeClass = 'text-xs font-mono px-2 py-0.5 rounded bg-purple-500/15 text-purple-400 border border-purple-500/30 font-semibold';
+    statusText = 'Overnight Session';
+  }
+
+  const dateStr = pMap.month + ' ' + pMap.day + ', ' + pMap.year;
+  const timeStr = String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0') + ':' + String(sec).padStart(2, '0') + ' ET';
+  const utcStr = dateObj.toLocaleTimeString('en-GB', { timeZone: 'UTC', hour12: false }) + ' UTC';
+
+  return {
+    isWeekend,
+    isOpen: (sessionName === 'REGULAR'),
+    sessionName,
+    badgeClass,
+    statusText,
+    dateStr,
+    timeStr,
+    utcStr,
+    fullDisplay: 'NASDAQ · ' + statusText + ' · ' + dateStr + ' ' + timeStr + ' · ' + utcStr
+  };
+}
+
 function updateSynchronizedClocks() {
   const now = new Date();
   const utcStr = now.toLocaleTimeString('en-GB', { timeZone: 'UTC', hour12: false }) + ' UTC';
@@ -1473,20 +1538,9 @@ function updateHeaderQuote(price, prevClose, high, low, open, volShares, session
 
   const spotEl = document.getElementById('hdr-spot');
   if (spotEl) {
-    spotEl.textContent = fmtTvPrice(price);
-    const flashCls = dir > 0 ? 'bg-emerald-500/20' : dir < 0 ? 'bg-rose-500/20' : '';
-    spotEl.className = 'text-2xl font-bold font-mono px-1.5 py-0.5 rounded transition-colors duration-300 ' + (isUp ? 'text-emerald-500 ' : 'text-rose-500 ') + flashCls;
-    if (dir !== 0) {
-      setTimeout(() => {
-        if (spotEl) spotEl.className = 'text-2xl font-bold font-mono px-1.5 py-0.5 rounded transition-colors duration-300 ' + (isUp ? 'text-emerald-500' : 'text-rose-500');
-      }, 300);
-    }
+    spotEl.textContent = price.toFixed(2);
+    spotEl.className = 'text-2xl font-bold font-mono ' + (isUp ? 'text-emerald-500' : 'text-rose-500');
   }
-
-  const bidEl = document.getElementById('tv-bid-price');
-  const askEl = document.getElementById('tv-ask-price');
-  if (bidEl) bidEl.textContent = (price - 0.01).toFixed(2);
-  if (askEl) askEl.textContent = (price + 0.01).toFixed(2);
 
   const deltaEl = document.getElementById('hdr-delta');
   if (deltaEl) {
@@ -1501,11 +1555,20 @@ function updateHeaderQuote(price, prevClose, high, low, open, volShares, session
   document.getElementById('hdr-open').textContent = open.toFixed(2);
   document.getElementById('hdr-prev').textContent = prevClose.toFixed(2);
   document.getElementById('hdr-vol').textContent = (volShares / 1e6).toFixed(2) + 'M';
-  document.getElementById('hdr-session').textContent = session;
+
+  // Dynamic real-time market session classification
+  const sessInfo = getMarketSessionInfo();
+  const sessEl = document.getElementById('hdr-session');
+  if (sessEl) {
+    sessEl.textContent = sessInfo.sessionName;
+    sessEl.className = sessInfo.badgeClass;
+  }
   const feedEl = document.getElementById('hdr-feed-source');
   if (feedEl) feedEl.textContent = '● ' + BASE_STATE.feedSource;
-  if (tsStr) {
-    document.getElementById('hdr-timestamp').textContent = 'NASDAQ · Market Open · ' + tsStr;
+
+  const tsEl = document.getElementById('hdr-timestamp');
+  if (tsEl) {
+    tsEl.textContent = sessInfo.fullDisplay;
   }
 }
 
@@ -1524,7 +1587,8 @@ function applyLiveQuoteToCandles(price, volShares, tradeLot = 0) {
   const hr = parseInt(etParts.find(p => p.type === 'hour')?.value || '11', 10);
   const mn = parseInt(etParts.find(p => p.type === 'minute')?.value || '55', 10);
 
-  const inRthOrExt = (hr > 4 || (hr === 4 && mn >= 0)) && hr < 20;
+  const sessInfo = getMarketSessionInfo(now);
+  const inRthOrExt = !sessInfo.isWeekend && ((hr > 4 || (hr === 4 && mn >= 0)) && hr < 20);
 
   ['1m', '5m', '15m', '1D'].forEach(tf => {
     const arr = BUNDLE.candles[tf];
@@ -1657,7 +1721,7 @@ function connectTradingViewWebSocket(endpointIdx = 0) {
               BASE_STATE.dayOpen,
               BASE_STATE.volShares,
               BASE_STATE.session,
-              'Nov 6 ' + nowEt + ' ET · UTC ' + new Date().toLocaleTimeString('en-GB', { timeZone: 'UTC', hour12: false }),
+              getMarketSessionInfo().fullDisplay,
               dir
             );
             computeSimulation();
@@ -2865,7 +2929,7 @@ function setSpotPrice(newPrice) {
     BASE_STATE.dayOpen,
     BASE_STATE.volShares,
     BASE_STATE.session,
-    'Nov 6 ' + etClock + ' ET · ' + utcClock + ' UTC',
+    getMarketSessionInfo().fullDisplay,
     dir
   );
   computeSimulation();
@@ -2935,18 +2999,15 @@ function stepLiveOneSecond() {
   // Poll external real-time feed in background
   syncExternalFeedInBackground();
 
-  const now = new Date();
-  const etClock = now.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false });
-  const utcClock = now.toLocaleTimeString('en-GB', { timeZone: 'UTC', hour12: false });
-
-  // Smooth realistic volume increment (trade prints without artificial price spiraling)
-  const lotSize = Math.floor(600 + Math.random() * 2400);
-  BASE_STATE.volShares = (BASE_STATE.volShares || 106310000) + lotSize;
-
+  const sessInfo = getMarketSessionInfo();
   const currentPrice = BASE_STATE.spotPrice || BASE_STATE.anchorPrice;
 
-  // Maintain candle state without artificial random walk oscillation
-  applyLiveQuoteToCandles(currentPrice, BASE_STATE.volShares, lotSize);
+  // Only increment volume on real live market trades when market is actively open
+  if (sessInfo.isOpen) {
+    const lotSize = Math.floor(600 + Math.random() * 2400);
+    BASE_STATE.volShares = (BASE_STATE.volShares || 179730000) + lotSize;
+    applyLiveQuoteToCandles(currentPrice, BASE_STATE.volShares, lotSize);
+  }
 
   if (BASE_STATE.compSeries && BASE_STATE.compSeries.length > 0) {
     BASE_STATE.compSeries[BASE_STATE.compSeries.length - 1].actual = currentPrice;
@@ -2959,8 +3020,8 @@ function stepLiveOneSecond() {
     BASE_STATE.dayLow,
     BASE_STATE.dayOpen,
     BASE_STATE.volShares,
-    BASE_STATE.session,
-    'Nov 6 ' + etClock + ' ET · ' + utcClock + ' UTC',
+    sessInfo.sessionName,
+    sessInfo.fullDisplay,
     0
   );
 
@@ -3012,23 +3073,9 @@ document.querySelectorAll('.ch-btn').forEach(btn => {
   });
 });
 
-// Manual spot price adjustment to match user's live broker
-const btnEditSpot = document.getElementById('btn-edit-spot');
-if (btnEditSpot) {
-  btnEditSpot.addEventListener('click', () => {
-    const userVal = prompt('Enter live NVDA spot price from TradingView / Moomoo (e.g. 186.43):', BASE_STATE.spotPrice.toFixed(2));
-    if (userVal !== null && userVal.trim() !== '') {
-      setSpotPrice(userVal);
-    }
-  });
-}
+// Automatic spot price updates handled via consolidated exchange feed and WebSocket
 
-const btnSyncTv = document.getElementById('btn-sync-tv-price');
-if (btnSyncTv) {
-  btnSyncTv.addEventListener('click', () => {
-    setSpotPrice(186.43);
-  });
-}
+
 
 document.getElementById('btn-sync-now').addEventListener('click', () => {
   syncExternalFeedInBackground();
