@@ -181,14 +181,14 @@ class MarketDataFetcher:
         fallback_df.attrs["is_fallback_data"] = True
         return fallback_df
 
-    def get_nvda_intraday(self, period: str = "5d", interval: str = "15m", force_refresh: bool = False) -> pd.DataFrame:
-        key = f"intra_{period}_{interval}"
+    def get_nvda_intraday(self, period: str = "5d", interval: str = "15m", prepost: bool = False, force_refresh: bool = False) -> pd.DataFrame:
+        key = f"intra_{period}_{interval}_{prepost}"
         if not force_refresh and self._is_fresh(key, ttl=15.0):
             return self._cache[key]
 
         try:
             ticker = yf.Ticker(self.symbol)
-            df = ticker.history(period=period, interval=interval, prepost=True, auto_adjust=False)
+            df = ticker.history(period=period, interval=interval, prepost=prepost, auto_adjust=False)
             if df is not None and not df.empty:
                 df = df.dropna(subset=["Close"]).copy()
                 if df.index.tz is not None:
@@ -207,13 +207,14 @@ class MarketDataFetcher:
         timeframe: str = "1D",
         limit: int = 240,
         force_refresh: bool = False,
+        session: str = "RTH",
     ) -> Dict[str, Any]:
         """
         Returns Moomoo / TradingView compatible OHLCV candlestick + MAVOL (5, 10, 20)
         and Moving Average (MA5, MA20, MA50, VWAP) series for:
-          - '1m'  (1-day 1-minute bars including extended hours)
+          - '1m'  (1-day 1-minute bars)
           - '5m'  (5-day 5-minute bars)
-          - '15m' (1-month 15-minute bars)
+          - '15m' (15-minute bars)
           - '1D'  (daily bars)
           - '5Y'  (5-year daily bars, up to 1,255+ bars)
         """
@@ -227,16 +228,17 @@ class MarketDataFetcher:
             limit = 1300
         limit = max(15, min(int(limit), 2000))
 
-        cache_key = f"ohlcv_candles_{tf}_{limit}"
+        use_rth = session.upper() == "RTH"
+        cache_key = f"ohlcv_candles_{tf}_{limit}_{session.upper()}"
         if not force_refresh and self._is_fresh(cache_key, ttl=8.0):
             return self._cache[cache_key]
 
         if tf == "1m":
-            df = self.get_nvda_intraday(period="1d", interval="1m", force_refresh=force_refresh)
+            df = self.get_nvda_intraday(period="1d", interval="1m", prepost=not use_rth, force_refresh=force_refresh)
         elif tf == "5m":
-            df = self.get_nvda_intraday(period="5d", interval="5m", force_refresh=force_refresh)
+            df = self.get_nvda_intraday(period="5d", interval="5m", prepost=not use_rth, force_refresh=force_refresh)
         elif tf == "15m":
-            df = self.get_nvda_intraday(period="1mo", interval="15m", force_refresh=force_refresh)
+            df = self.get_nvda_intraday(period="5d", interval="15m", prepost=not use_rth, force_refresh=force_refresh)
         else:
             if tf not in ("1D", "5Y"):
                 tf = "1D"

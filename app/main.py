@@ -72,8 +72,9 @@ def get_candles(
     timeframe: str = Query("1D", description="Timeframe: 1m, 5m, 15m, 1D, or 5Y"),
     limit: int = Query(220, ge=30, le=2000),
     refresh: bool = Query(False),
+    session: str = Query("RTH", description="Session filter: RTH (Regular Trading Hours) or ALL"),
 ) -> Dict[str, Any]:
-    return service.fetcher.get_ohlcv_candles(timeframe=timeframe, limit=limit, force_refresh=refresh)
+    return service.fetcher.get_ohlcv_candles(timeframe=timeframe, limit=limit, force_refresh=refresh, session=session)
 
 
 @app.get("/api/database_status")
