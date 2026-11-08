@@ -89,7 +89,7 @@ def api_backtest_series(
 ) -> Dict[str, Any]:
     """Returns chronological out-of-sample walk-forward predictions vs actuals from SQLite."""
     win = window.upper()
-    lim = 60 if win == "60D" else (252 if win == "1Y" else 1300)
+    lim = 30 if win in ("30D", "30") else (60 if win in ("60D", "60") else (252 if win in ("1Y", "252D") else 1300))
     series = service.db.get_backtest_comparison_series(limit=lim, horizon_type=horizon.upper())
     return {
         "window": win,
