@@ -70,8 +70,14 @@ class NVDAPricePredictor:
             )
         )
 
-        daily_vol = float(technicals.get("daily_volatility", 0.028)) * vol_mult
-        daily_vol = float(np.clip(daily_vol, 0.012, 0.065))
+        daily_vol_raw = float(technicals.get("daily_volatility", 0.028))
+        daily_vol_raw = float(np.clip(daily_vol_raw, 0.012, 0.065))
+        daily_vol = float(np.clip(daily_vol_raw * vol_mult, 0.012, 0.075))
+        q68_conf = float(calibration_state.get("q68_conformal", 1.02))
+        q95_conf = float(calibration_state.get("q95_conformal", 1.98))
+
+        # Bounded drift bias (consistent with AdaptiveCalibrator ±0.35%/day cap)
+        bias_drift = float(np.clip(bias_drift, -0.0035, 0.0035))
 
         # ---------------------------------------------------------------------
         # 1. OVERNIGHT, MARKET OPEN (09:30 ET), AND TODAY'S CLOSE (16:00 ET)
@@ -89,18 +95,27 @@ class NVDAPricePredictor:
         )
 
         # Overnight session drift (20:00 ET -> 04:00 ET)
-        overnight_drift = 0.0085 * overnight_lead_score + 0.30 * bias_drift
+        max_ov_drift = min(0.010, 0.38 * daily_vol_raw)
+        overnight_drift = float(
+            np.clip(0.0085 * overnight_lead_score + 0.30 * bias_drift, -max_ov_drift, max_ov_drift)
+        )
         overnight_sigma = daily_vol * 0.38
         overnight_pred = current_price * (1.0 + overnight_drift)
 
-        # Market Open (09:30 ET) prediction
-        open_drift = 0.0125 * open_lead_score + 0.45 * bias_drift
-        open_sigma = daily_vol * 0.52
+        # Market Open (09:30 ET) prediction (identical formula to AdaptiveCalibrator)
+        max_open_drift = min(0.012, 0.45 * daily_vol_raw)
+        open_drift = float(
+            np.clip(0.0125 * open_lead_score + 0.45 * bias_drift, -max_open_drift, max_open_drift)
+        )
+        open_sigma = daily_vol * 0.56
         open_pred = current_price * (1.0 + open_drift)
 
-        # Intraday Close (16:00 ET) prediction
-        close_drift = BASE_DAILY_SENSITIVITY * composite_score + bias_drift
-        close_sigma = daily_vol * 0.90
+        # Intraday Close (16:00 ET) prediction (identical formula to AdaptiveCalibrator)
+        max_close_drift = min(0.018, 0.65 * daily_vol_raw)
+        close_drift = float(
+            np.clip(BASE_DAILY_SENSITIVITY * composite_score + bias_drift, -max_close_drift, max_close_drift)
+        )
+        close_sigma = daily_vol * 1.00
         close_pred = current_price * (1.0 + close_drift)
 
         short_term_horizons = {
@@ -111,6 +126,8 @@ class NVDAPricePredictor:
                 pred_price=overnight_pred,
                 sigma=overnight_sigma,
                 driver_summary="Driven by post-market whale flow, NQ=F futures, and TSMC Asian session lead.",
+                q68=q68_conf,
+                q95=q95_conf,
             ),
             "market_open": self._format_horizon_card(
                 title="Next Market Open (09:30 ET Opening Bell)",
@@ -119,6 +136,8 @@ class NVDAPricePredictor:
                 pred_price=open_pred,
                 sigma=open_sigma,
                 driver_summary="Driven by pre-market volume accumulation, institutional block orders, and SMH/Nasdaq futures.",
+                q68=q68_conf,
+                q95=q95_conf,
             ),
             "intraday_close": self._format_horizon_card(
                 title="Full Session Close (16:00 ET)",
@@ -127,50 +146,93 @@ class NVDAPricePredictor:
                 pred_price=close_pred,
                 sigma=close_sigma,
                 driver_summary="Driven by full 5-factor calibrated composite score + intraday institutional VWAP flow.",
+                q68=q68_conf,
+                q95=q95_conf,
             ),
         }
 
         # ---------------------------------------------------------------------
         # 2. 1-WEEK (5-TRADING-DAY) MONTE CARLO + JUMP-DIFFUSION SIMULATION
+        #    - Zero lagging SMA20 pull (eliminates -10% artificial drag on post-selloff rebounds)
+        #    - Exact Itô + Jump convexity compensation
+        #    - Rapid decay of overnight/open lead (0.25^day_idx) after Day 1 Open
+        #    - Exact alignment of Day 1 Open & Day 1 Close with short_term_horizons
         # ---------------------------------------------------------------------
-        # 10 half-day steps (Day 1 Open, Day 1 Close, ..., Day 5 Open, Day 5 Close)
         n_paths = 2000
         n_steps = 10
-        rng = np.random.default_rng(int( round(current_price * 100) ) + 20261106)
+        rng = np.random.default_rng(int(round(current_price * 100)) + 20261106)
 
         paths = np.zeros((n_paths, n_steps + 1), dtype=float)
         paths[:, 0] = current_price
 
-        sma_20 = float(technicals.get("sma_20", current_price))
         whale_score = float(effective_scores.get("whale_institutional", 0.0))
 
-        # Jump-diffusion parameters: high whale score shifts jump mean upward
+        # Jump-diffusion parameters
         jump_prob_per_step = 0.06 + 0.04 * abs(whale_score)
-        jump_mean = 0.006 * whale_score
-        jump_std = daily_vol * 0.55
+        jump_mean = 0.004 * whale_score
+        jump_std = daily_vol * 0.50
 
+        expected_center = current_price
         for step in range(1, n_steps + 1):
             is_open_step = (step % 2 == 1)
             day_idx = (step - 1) // 2  # 0..4
-            # Factor momentum decays slightly over 5 days toward structural trend
-            decay = 0.88 ** day_idx
-            if is_open_step:
-                step_mu = (0.42 * BASE_DAILY_SENSITIVITY * open_lead_score * decay) + 0.40 * bias_drift
+
+            open_decay = 0.25 ** day_idx
+            comp_decay = 0.85 ** day_idx
+            bias_decay = 0.70 ** day_idx
+
+            if step == 1:
+                # Day 1 Open matches short_term_horizons["market_open"]
+                step_mu = open_drift
+                step_sig = daily_vol * 0.55
+            elif step == 2:
+                # Day 1 Close matches short_term_horizons["intraday_close"]
+                step_mu = ((1.0 + close_drift) / max(1.0 + open_drift, 1e-4)) - 1.0
+                step_sig = daily_vol * 0.75
+            elif is_open_step:
+                step_mu = (
+                    0.35 * BASE_DAILY_SENSITIVITY * open_lead_score * open_decay
+                    + 0.15 * BASE_DAILY_SENSITIVITY * composite_score * comp_decay
+                    + 0.35 * bias_drift * bias_decay
+                )
                 step_sig = daily_vol * 0.55
             else:
-                step_mu = (0.58 * BASE_DAILY_SENSITIVITY * composite_score * decay) + 0.60 * bias_drift
-                step_sig = daily_vol * 0.78
+                step_mu = (
+                    0.55 * BASE_DAILY_SENSITIVITY * composite_score * comp_decay
+                    + 0.55 * bias_drift * bias_decay
+                )
+                step_sig = daily_vol * 0.75
+
+            step_mu = float(np.clip(step_mu, -0.025, 0.025))
+            prev_p = paths[:, step - 1]
+
+            # Soft spot-anchored variance damping around the deterministic drift center (zero mean shift!)
+            cum_dev = np.log(np.maximum(prev_p, 1e-4) / max(expected_center, 1e-4))
+            spot_damping = -0.03 * cum_dev
 
             z = rng.standard_normal(n_paths)
             jumps = (rng.random(n_paths) < jump_prob_per_step).astype(float) * rng.normal(
                 jump_mean, jump_std, size=n_paths
             )
-            # Mild elasticity toward rising/falling 20-day structure to prevent unrealistic runaway variance
-            prev_p = paths[:, step - 1]
-            mean_rev = -0.025 * ((prev_p - sma_20 * (1.0 + 0.015 * composite_score)) / max(sma_20, 1.0))
 
-            step_ret = step_mu + mean_rev + step_sig * z + jumps
-            paths[:, step] = prev_p * np.exp(step_ret)
+            # Exact Itô + Jump compensator so E[exp(noise)] = 1 and median(noise) = 0
+            ito_jump_comp = -0.5 * (step_sig ** 2) - jump_prob_per_step * (
+                np.exp(jump_mean + 0.5 * (jump_std ** 2)) - 1.0
+            )
+            raw_innov = ito_jump_comp + step_sig * z + jumps
+            centered_innov = raw_innov - float(np.median(raw_innov))
+
+            step_log_ret = float(np.log1p(step_mu)) + spot_damping + centered_innov
+            paths[:, step] = prev_p * np.exp(step_log_ret)
+            if step == 1:
+                med_1 = float(np.median(paths[:, 1]))
+                if med_1 > 0:
+                    paths[:, 1] *= open_pred / med_1
+            elif step == 2:
+                med_2 = float(np.median(paths[:, 2]))
+                if med_2 > 0:
+                    paths[:, 2] *= close_pred / med_2
+            expected_center = expected_center * (1.0 + step_mu)
 
         # Build 1-Week trajectory timeline (10 checkpoints + t=0 Spot)
         b_days = self._next_five_trading_days()
@@ -269,7 +331,7 @@ class NVDAPricePredictor:
             short_term_horizons=short_term_horizons,
         )
 
-        # Log today's live prediction if requested and not a temporary What-If run
+        # Log today's live MARKET_OPEN and DAILY_CLOSE predictions if requested and not a What-If run
         if log_to_db and not what_if_overrides:
             now_iso = datetime.now(ET_ZONE).isoformat()
             next_day_str = b_days[0].strftime("%Y-%m-%d")
@@ -284,6 +346,22 @@ class NVDAPricePredictor:
                 high_68=short_term_horizons["market_open"]["high_68"],
                 low_95=short_term_horizons["market_open"]["low_95"],
                 high_95=short_term_horizons["market_open"]["high_95"],
+                factor_scores=effective_scores,
+                weights_used=weights,
+                actual_price=None,
+                is_backtest=False,
+            )
+            self.db.log_prediction(
+                created_at=now_iso,
+                target_date=next_day_str,
+                horizon_type="DAILY_CLOSE",
+                horizon_days=1.0,
+                base_price=round(current_price, 2),
+                predicted_price=short_term_horizons["intraday_close"]["predicted_price"],
+                low_68=short_term_horizons["intraday_close"]["low_68"],
+                high_68=short_term_horizons["intraday_close"]["high_68"],
+                low_95=short_term_horizons["intraday_close"]["low_95"],
+                high_95=short_term_horizons["intraday_close"]["high_95"],
                 factor_scores=effective_scores,
                 weights_used=weights,
                 actual_price=None,
@@ -320,11 +398,8 @@ class NVDAPricePredictor:
         short_term_horizons: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Compares current NVDA price against historical resolved predictions and active session targets."""
-        resolved = self.db.get_recent_predictions(limit=30, resolved_only=True)
-
-        # Latest resolved Market Open and Daily Close predictions
-        open_preds = [p for p in resolved if p.get("horizon_type") == "MARKET_OPEN"][:12]
-        close_preds = [p for p in resolved if p.get("horizon_type") == "DAILY_CLOSE"][:12]
+        open_preds = self.db.get_recent_predictions(limit=12, resolved_only=True, horizon_type="MARKET_OPEN")
+        close_preds = self.db.get_recent_predictions(limit=12, resolved_only=True, horizon_type="DAILY_CLOSE")
 
         latest_resolved_close = close_preds[0] if close_preds else None
         latest_resolved_open = open_preds[0] if open_preds else None
@@ -343,23 +418,9 @@ class NVDAPricePredictor:
         spread_dollars = round(benchmark_pred - current_price, 2)
         spread_pct = round(((benchmark_pred - current_price) / current_price) * 100.0, 2)
 
-        # Build chronological comparison series for chart (last 18 daily close predictions vs actuals)
-        chart_records = []
-        for p in reversed(close_preds[:18]):
-            chart_records.append(
-                {
-                    "date": p["target_date"],
-                    "horizon": p["horizon_type"],
-                    "base_price": round(float(p["base_price"]), 2),
-                    "predicted_price": round(float(p["predicted_price"]), 2),
-                    "actual_price": round(float(p["actual_price"]), 2) if p.get("actual_price") else None,
-                    "low_68": round(float(p["low_68"]), 2),
-                    "high_68": round(float(p["high_68"]), 2),
-                    "abs_error": round(float(p["abs_error"]), 2) if p.get("abs_error") is not None else 0.0,
-                    "pct_error": round(float(p["pct_error"]), 2) if p.get("pct_error") is not None else 0.0,
-                    "direction_correct": bool(p.get("direction_correct", 0)),
-                }
-            )
+        # Build chronological comparison series (recent 60 daily close predictions + full 5Y series)
+        full_5y_series = self.db.get_backtest_comparison_series(limit=1260, horizon_type="DAILY_CLOSE")
+        chart_records = full_5y_series[-60:] if len(full_5y_series) >= 60 else full_5y_series
 
         return {
             "current_market_price": round(current_price, 2),
@@ -381,6 +442,7 @@ class NVDAPricePredictor:
             "latest_resolved_open": latest_resolved_open,
             "latest_resolved_close": latest_resolved_close,
             "historical_comparison_series": chart_records,
+            "historical_comparison_5y_count": len(full_5y_series),
         }
 
     @staticmethod
@@ -458,12 +520,14 @@ class NVDAPricePredictor:
         pred_price: float,
         sigma: float,
         driver_summary: str,
+        q68: float = 1.02,
+        q95: float = 1.98,
     ) -> Dict[str, Any]:
         ret_pct = ((pred_price - base_price) / base_price) * 100.0 if base_price > 0 else 0.0
-        low_68 = pred_price * (1.0 - sigma)
-        high_68 = pred_price * (1.0 + sigma)
-        low_95 = pred_price * (1.0 - 1.96 * sigma)
-        high_95 = pred_price * (1.0 + 1.96 * sigma)
+        low_68 = pred_price * float(np.exp(-q68 * sigma))
+        high_68 = pred_price * float(np.exp(+q68 * sigma))
+        low_95 = pred_price * float(np.exp(-q95 * sigma))
+        high_95 = pred_price * float(np.exp(+q95 * sigma))
         return {
             "title": title,
             "horizon_type": horizon_type,

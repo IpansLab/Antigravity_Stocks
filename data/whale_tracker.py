@@ -137,7 +137,7 @@ class WhaleActivityTracker:
         except Exception:
             pass
 
-        avg_weighted_chg = (weighted_pct_change_num / total_val_usd) if total_val_usd > 0 else 0.85
+        avg_weighted_chg = (weighted_pct_change_num / total_val_usd) if total_val_usd > 0 else 0.0
         # Normalize: +1.5% net institutional expansion across top 10 giants is strongly bullish (+0.75)
         inst_score = float(np.clip(avg_weighted_chg / 2.0, -1.0, 1.0))
 
@@ -243,10 +243,10 @@ class WhaleActivityTracker:
                 h = float(row["High"])
                 l = float(row["Low"])
                 c = float(row["Close"])
-                hl_range = max(h - l, 0.01)
+                hl_range = max(h - l, 0.005 * c, 1e-4)
                 # Close Location Value in [-1, +1] and body return
                 clv = ((c - l) - (h - c)) / hl_range
-                ret = (c - o) / max(o, 1.0)
+                ret = (c - o) / max(o, 1e-4)
                 rvol = v / max(vol_mean, 1.0)
                 z_vol = (v - vol_mean) / max(vol_std, 1.0)
 

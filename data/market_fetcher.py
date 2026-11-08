@@ -144,7 +144,7 @@ class MarketDataFetcher:
         }
 
     def _get_daily_mavol_metrics(self, current_vol: Optional[int] = None) -> Dict[str, float]:
-        daily_df = self.get_nvda_daily(period="1y", force_refresh=False)
+        daily_df = self.get_nvda_daily(period="5y", force_refresh=False)
         if daily_df.empty:
             return {"vol_m": 71.0, "mavol5_m": 146.85, "mavol10_m": 124.89, "mavol20_m": 112.08}
         vols = daily_df["Volume"].astype(float).copy()
@@ -158,7 +158,7 @@ class MarketDataFetcher:
             "mavol20_m": round(float(v_m.tail(20).mean()), 3),
         }
 
-    def get_nvda_daily(self, period: str = "1y", force_refresh: bool = False) -> pd.DataFrame:
+    def get_nvda_daily(self, period: str = "5y", force_refresh: bool = False) -> pd.DataFrame:
         key = f"daily_{period}"
         if not force_refresh and self._is_fresh(key, ttl=30.0):
             return self._cache[key]
@@ -172,11 +172,14 @@ class MarketDataFetcher:
                     df.index = df.index.tz_convert(ET_ZONE)
                 else:
                     df.index = df.index.tz_localize("UTC").tz_convert(ET_ZONE)
+                df.attrs["is_fallback_data"] = False
                 return self._set_cache(key, df)
         except Exception:
             pass
 
-        return self._generate_fallback_daily()
+        fallback_df = self._generate_fallback_daily()
+        fallback_df.attrs["is_fallback_data"] = True
+        return fallback_df
 
     def get_nvda_intraday(self, period: str = "5d", interval: str = "15m", force_refresh: bool = False) -> pd.DataFrame:
         key = f"intra_{period}_{interval}"
@@ -192,6 +195,7 @@ class MarketDataFetcher:
                     df.index = df.index.tz_convert(ET_ZONE)
                 else:
                     df.index = df.index.tz_localize("UTC").tz_convert(ET_ZONE)
+                df.attrs["is_fallback_data"] = False
                 return self._set_cache(key, df)
         except Exception:
             pass
@@ -210,9 +214,19 @@ class MarketDataFetcher:
           - '1m'  (1-day 1-minute bars including extended hours)
           - '5m'  (5-day 5-minute bars)
           - '15m' (1-month 15-minute bars)
-          - '1D'  (1-year daily bars)
+          - '1D'  (daily bars)
+          - '5Y'  (5-year daily bars, up to 1,255+ bars)
         """
-        tf = timeframe.upper() if timeframe.upper() == "1D" else timeframe.lower()
+        raw_tf = timeframe.strip()
+        if raw_tf.upper() in ("1D", "5Y"):
+            tf = raw_tf.upper()
+        else:
+            tf = raw_tf.lower()
+
+        if tf == "5Y" and limit <= 240:
+            limit = 1300
+        limit = max(15, min(int(limit), 2000))
+
         cache_key = f"ohlcv_candles_{tf}_{limit}"
         if not force_refresh and self._is_fresh(cache_key, ttl=8.0):
             return self._cache[cache_key]
@@ -224,11 +238,12 @@ class MarketDataFetcher:
         elif tf == "15m":
             df = self.get_nvda_intraday(period="1mo", interval="15m", force_refresh=force_refresh)
         else:
-            tf = "1D"
-            df = self.get_nvda_daily(period="1y", force_refresh=force_refresh)
+            if tf not in ("1D", "5Y"):
+                tf = "1D"
+            df = self.get_nvda_daily(period="5y", force_refresh=force_refresh)
 
         if df is None or df.empty:
-            df = self.get_nvda_daily(period="1y", force_refresh=False)
+            df = self.get_nvda_daily(period="5y", force_refresh=False)
 
         df = df.copy()
         # Filter out 0-volume placeholder 1m bars if followed by active bars, but keep the latest bar
@@ -239,9 +254,9 @@ class MarketDataFetcher:
 
         # Sync the very last bar with live fast_info quote so chart matches header to the penny
         tick = self.get_fast_live_tick()
-        if len(df) > 0:
+        if len(df) > 0 and not bool(df.attrs.get("is_fallback_data", False)):
             df.iloc[-1, df.columns.get_loc("Close")] = tick["price"]
-            if tf == "1D":
+            if tf in ("1D", "5Y"):
                 df.iloc[-1, df.columns.get_loc("High")] = max(float(df["High"].iloc[-1]), float(tick["day_high"]))
                 df.iloc[-1, df.columns.get_loc("Low")] = min(float(df["Low"].iloc[-1]), float(tick["day_low"]))
                 if tick["volume"] > 0:
@@ -264,10 +279,11 @@ class MarketDataFetcher:
         typ_p = (highs + lows + closes) / 3.0
         pv_cum = (typ_p * vols).rolling(20, min_periods=1).sum()
         v_cum = vols.rolling(20, min_periods=1).sum().replace(0, np.nan)
-        vwap_s = (pv_p := pv_cum / v_cum).fillna(closes)
+        vwap_s = (pv_cum / v_cum).fillna(closes)
 
         tail_df = df.tail(limit)
         candles: List[Dict[str, Any]] = []
+        is_daily_tf = tf in ("1D", "5Y")
         for idx_ts, row in tail_df.iterrows():
             loc = df.index.get_loc(idx_ts)
             if isinstance(loc, slice):
@@ -275,8 +291,8 @@ class MarketDataFetcher:
             elif isinstance(loc, np.ndarray):
                 loc = int(np.where(loc)[0][-1])
 
-            label = idx_ts.strftime("%Y-%m-%d") if tf == "1D" else idx_ts.strftime("%m/%d %H:%M")
-            sess = "REGULAR" if tf == "1D" else self.classify_market_session(idx_ts)
+            label = idx_ts.strftime("%Y-%m-%d") if is_daily_tf else idx_ts.strftime("%m/%d %H:%M")
+            sess = "REGULAR" if is_daily_tf else self.classify_market_session(idx_ts)
             candles.append(
                 {
                     "timestamp": idx_ts.isoformat(),
@@ -322,23 +338,53 @@ class MarketDataFetcher:
 
     def get_session_breakdown(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
-        Extracts accurate real-time NVDA price, previous regular close ($181.60),
-        day high/low/open, real volume, MAVOL(5/10/20), and intraday VWAP.
+        Extracts accurate real-time NVDA price, previous regular close,
+        latest completed regular close, day high/low/open, real volume, MAVOL(5/10/20),
+        and intraday VWAP without conflating regular-session returns with extended-hours gaps.
         """
-        daily_df = self.get_nvda_daily(period="1y", force_refresh=force_refresh)
+        daily_df = self.get_nvda_daily(period="5y", force_refresh=force_refresh)
         intra_df = self.get_nvda_intraday(period="5d", interval="15m", force_refresh=force_refresh)
         tick = self.get_fast_live_tick()
 
         current_price = float(tick["price"])
-        prev_regular_close = float(tick["prev_regular_close"])
         day_high = float(tick["day_high"])
         day_low = float(tick["day_low"])
         day_open = float(tick["day_open"])
         latest_daily_vol = int(tick["volume"])
         active_session = str(tick["active_session"])
 
-        change_dollars = round(current_price - prev_regular_close, 3)
-        change_pct = round(((current_price - prev_regular_close) / max(prev_regular_close, 1.0)) * 100.0, 2)
+        # Distinguish yesterday's regular close (iloc[-2]) from the latest completed regular close (iloc[-1])
+        if not daily_df.empty and len(daily_df) >= 2:
+            prev_day_close = round(float(daily_df["Close"].iloc[-2]), 3)
+            last_reg_close = round(float(daily_df["Close"].iloc[-1]), 3)
+        elif not daily_df.empty and len(daily_df) == 1:
+            prev_day_close = round(float(daily_df["Close"].iloc[-1]), 3)
+            last_reg_close = prev_day_close
+        else:
+            prev_day_close = float(tick["prev_regular_close"])
+            last_reg_close = prev_day_close
+
+        if active_session == "REGULAR":
+            # During regular hours, the last completed regular close is yesterday's close
+            ref_prev_close = prev_day_close
+            ref_last_reg_close = prev_day_close
+            change_dollars = round(current_price - ref_prev_close, 3)
+            regular_change_pct = round(((current_price - ref_prev_close) / max(ref_prev_close, 1e-6)) * 100.0, 2)
+            extended_change_pct = 0.0
+        else:
+            # During POST_MARKET, OVERNIGHT, WEEKEND_OVERNIGHT, or PRE_MARKET:
+            # last_reg_close is the most recently completed 16:00 ET regular session close (daily_df["Close"].iloc[-1]),
+            # and prev_day_close is the session before that (daily_df["Close"].iloc[-2]).
+            ref_prev_close = prev_day_close
+            ref_last_reg_close = last_reg_close
+            change_dollars = round(current_price - ref_prev_close, 3)
+            regular_change_pct = round(((ref_last_reg_close - ref_prev_close) / max(ref_prev_close, 1e-6)) * 100.0, 2)
+            if abs(current_price - ref_last_reg_close) < 1e-4:
+                extended_change_pct = 0.0
+            else:
+                extended_change_pct = round(
+                    ((current_price - ref_last_reg_close) / max(ref_last_reg_close, 1e-6)) * 100.0, 2
+                )
 
         # Compute intraday VWAP from today's 15m/1m bars
         vwap_intraday = round((day_high + day_low + current_price) / 3.0, 3)
@@ -361,13 +407,17 @@ class MarketDataFetcher:
             pre_bars = today_bars[today_bars["session"] == "PRE_MARKET"]
             if not pre_bars.empty:
                 premarket_price = round(float(pre_bars.iloc[-1]["Close"]), 3)
-                premarket_change_pct = round(((premarket_price - prev_regular_close) / prev_regular_close) * 100.0, 2)
+                premarket_change_pct = round(
+                    ((premarket_price - ref_prev_close) / max(ref_prev_close, 1e-6)) * 100.0, 2
+                )
                 premarket_volume = int(pre_bars["Volume"].sum())
 
             post_bars = today_bars[today_bars["session"] == "POST_MARKET"]
             if not post_bars.empty:
                 postmarket_price = round(float(post_bars.iloc[-1]["Close"]), 3)
-                postmarket_change_pct = round(((postmarket_price - prev_regular_close) / prev_regular_close) * 100.0, 2)
+                postmarket_change_pct = round(
+                    ((postmarket_price - ref_last_reg_close) / max(ref_last_reg_close, 1e-6)) * 100.0, 2
+                )
                 postmarket_volume = int(post_bars["Volume"].sum())
 
         avg_vol_20d = int(tick["mavol20_m"] * 1e6)
@@ -375,12 +425,12 @@ class MarketDataFetcher:
         return {
             "symbol": self.symbol,
             "current_price": current_price,
-            "last_regular_close": prev_regular_close,
-            "prev_regular_close": prev_regular_close,
+            "last_regular_close": ref_last_reg_close,
+            "prev_regular_close": ref_prev_close,
             "change_dollars": change_dollars,
-            "regular_change_pct": change_pct,
+            "regular_change_pct": regular_change_pct,
             "extended_price": current_price,
-            "extended_change_pct": change_pct,
+            "extended_change_pct": extended_change_pct,
             "active_session": active_session,
             "premarket_price": premarket_price,
             "premarket_change_pct": premarket_change_pct,
@@ -401,6 +451,7 @@ class MarketDataFetcher:
             "mavol10_m": tick["mavol10_m"],
             "mavol20_m": tick["mavol20_m"],
             "timestamp_et": tick["timestamp_et"],
+            "is_fallback_data": bool(daily_df.attrs.get("is_fallback_data", False)),
         }
 
     def get_multi_asset_context(self, force_refresh: bool = False) -> Dict[str, Dict[str, Any]]:
@@ -436,6 +487,7 @@ class MarketDataFetcher:
                             "price": round(last_c, 2),
                             "change_1d_pct": round(chg_1d, 2),
                             "change_5d_pct": round(chg_5d, 2),
+                            "is_fallback_data": False,
                         }
                 except Exception:
                     continue
@@ -443,16 +495,16 @@ class MarketDataFetcher:
             pass
 
         defaults = {
-            "NQ=F": (21250.0, 0.25, 1.10),
-            "ES=F": (6010.0, 0.18, 0.85),
-            "SMH": (262.4, 0.45, 1.80),
-            "TSM": (198.5, 0.60, 2.15),
-            "AMD": (148.2, -0.20, 0.40),
-            "AVGO": (182.0, 0.35, 1.50),
-            "MSFT": (428.0, 0.30, 1.10),
-            "^VIX": (15.8, -1.50, -4.20),
-            "^TNX": (4.28, -0.30, 0.50),
-            "DX-Y.NYB": (104.2, -0.10, 0.20),
+            "NQ=F": (21250.0, 0.0, 0.0),
+            "ES=F": (6010.0, 0.0, 0.0),
+            "SMH": (262.4, 0.0, 0.0),
+            "TSM": (198.5, 0.0, 0.0),
+            "AMD": (148.2, 0.0, 0.0),
+            "AVGO": (182.0, 0.0, 0.0),
+            "MSFT": (428.0, 0.0, 0.0),
+            "^VIX": (16.5, 0.0, 0.0),
+            "^TNX": (4.25, 0.0, 0.0),
+            "DX-Y.NYB": (104.0, 0.0, 0.0),
         }
         for sym, label in PEER_TICKERS.items():
             if sym not in results:
@@ -463,9 +515,55 @@ class MarketDataFetcher:
                     "price": p,
                     "change_1d_pct": c1,
                     "change_5d_pct": c5,
+                    "is_fallback_data": True,
                 }
 
         return self._set_cache(key, results)
+
+    def get_historical_peer_panel(
+        self,
+        nvda_index: pd.Index,
+        period: str = "5y",
+        force_refresh: bool = False,
+    ) -> Dict[str, np.ndarray]:
+        """
+        Downloads and caches 5-year daily Close series for all PEER_TICKERS,
+        causally aligned to `nvda_index` by trade date (forward-fill only, strictly zero look-ahead).
+        """
+        key = f"peer_panel_{period}_{len(nvda_index)}"
+        if not force_refresh and self._is_fresh(key, ttl=300.0):
+            return self._cache[key]
+
+        nvda_dates = pd.Index([pd.Timestamp(ts).strftime("%Y-%m-%d") for ts in nvda_index])
+        panel: Dict[str, np.ndarray] = {}
+        symbols = list(PEER_TICKERS.keys())
+        try:
+            raw = yf.download(
+                symbols,
+                period=period,
+                interval="1d",
+                group_by="ticker",
+                progress=False,
+                threads=True,
+                auto_adjust=False,
+            )
+            for sym in symbols:
+                try:
+                    sub = raw[sym].dropna(subset=["Close"]).copy()
+                    if not sub.empty:
+                        sub_dates = pd.Index([pd.Timestamp(ts).strftime("%Y-%m-%d") for ts in sub.index])
+                        s = pd.Series(sub["Close"].astype(float).values, index=sub_dates)
+                        s = s[~s.index.duplicated(keep="last")]
+                        # Reindex on union sorted dates, forward-fill only (causal), then select nvda_dates
+                        union_idx = s.index.union(nvda_dates).sort_values()
+                        aligned = s.reindex(union_idx).ffill().reindex(nvda_dates)
+                        panel[sym] = aligned.values.astype(float)
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        return self._set_cache(key, panel)
 
     def get_news_headlines(self, force_refresh: bool = False) -> List[Dict[str, str]]:
         """Fetches recent news items for NVDA."""
@@ -500,16 +598,18 @@ class MarketDataFetcher:
         return self._set_cache(key, headlines)
 
     @staticmethod
-    def _generate_fallback_daily() -> pd.DataFrame:
+    def _generate_fallback_daily(periods: int = 1255) -> pd.DataFrame:
         rng = np.random.default_rng(42)
-        dates = pd.date_range(end=datetime.now(ET_ZONE), periods=120, freq="B")
-        rets = rng.normal(0.0018, 0.026, size=len(dates))
+        dates = pd.date_range(end=datetime.now(ET_ZONE), periods=periods, freq="B")
+        rets = rng.normal(0.0, 0.026, size=len(dates))
         closes = 165.0 * np.cumprod(1.0 + rets)
         opens = closes * (1.0 + rng.normal(0.0, 0.008, size=len(dates)))
         highs = np.maximum(opens, closes) * (1.0 + np.abs(rng.normal(0.012, 0.006, size=len(dates))))
         lows = np.minimum(opens, closes) * (1.0 - np.abs(rng.normal(0.012, 0.006, size=len(dates))))
         vols = rng.integers(35_000_000, 95_000_000, size=len(dates))
-        return pd.DataFrame(
+        df = pd.DataFrame(
             {"Open": opens, "High": highs, "Low": lows, "Close": closes, "Volume": vols},
             index=dates,
         )
+        df.attrs["is_fallback_data"] = True
+        return df

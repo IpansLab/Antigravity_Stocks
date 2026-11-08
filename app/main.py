@@ -69,11 +69,35 @@ def get_live_tick() -> Dict[str, Any]:
 
 @app.get("/api/candles")
 def get_candles(
-    timeframe: str = Query("1D", description="Timeframe: 1m, 5m, 15m, or 1D"),
-    limit: int = Query(220, ge=30, le=500),
+    timeframe: str = Query("1D", description="Timeframe: 1m, 5m, 15m, 1D, or 5Y"),
+    limit: int = Query(220, ge=30, le=2000),
     refresh: bool = Query(False),
 ) -> Dict[str, Any]:
     return service.fetcher.get_ohlcv_candles(timeframe=timeframe, limit=limit, force_refresh=refresh)
+
+
+@app.get("/api/database_status")
+def api_database_status() -> Dict[str, Any]:
+    """Returns SQLite database row counts, 5-year date spans, before-vs-after deltas, and latest 5Y audit metrics."""
+    return service.db.get_database_status_summary()
+
+
+@app.get("/api/backtest_series")
+def api_backtest_series(
+    window: str = Query("5Y", description="Window: 60D, 1Y, or 5Y"),
+    horizon: str = Query("DAILY_CLOSE", description="Horizon: DAILY_CLOSE or MARKET_OPEN"),
+) -> Dict[str, Any]:
+    """Returns chronological out-of-sample walk-forward predictions vs actuals from SQLite."""
+    win = window.upper()
+    lim = 60 if win == "60D" else (252 if win == "1Y" else 1300)
+    series = service.db.get_backtest_comparison_series(limit=lim, horizon_type=horizon.upper())
+    return {
+        "window": win,
+        "horizon": horizon.upper(),
+        "count": len(series),
+        "series": series,
+        "calibration_history": service.db.get_calibration_history(limit=165),
+    }
 
 
 @app.post("/api/simulate")

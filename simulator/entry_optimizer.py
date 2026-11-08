@@ -42,11 +42,21 @@ class EntryPointOptimizer:
         whale_score : float
             Whale/Institutional factor score in [-1.0, +1.0].
         """
-        atr = float(technicals.get("atr_14", current_price * 0.03))
-        supports = technicals.get("support_levels", [])
-        resistances = technicals.get("resistance_levels", [])
-        vwap_poc = float(technicals.get("volume_poc", current_price * 0.975))
+        atr = max(float(technicals.get("atr_14", current_price * 0.03)), current_price * 0.005)
+        raw_supports = [float(s) for s in technicals.get("support_levels", []) if float(s) < current_price * 0.998]
+        resistances = [float(r) for r in technicals.get("resistance_levels", []) if float(r) > current_price * 1.002]
+
+        raw_poc = float(technicals.get("volume_poc", current_price * 0.975))
+        support_poc = float(technicals.get("support_volume_poc", current_price * 0.970))
+        if raw_poc < current_price * 0.998:
+            vwap_poc = raw_poc
+        elif support_poc < current_price * 0.998:
+            vwap_poc = support_poc
+        else:
+            vwap_poc = round(current_price - 0.95 * atr, 2)
+
         sma_20 = float(technicals.get("sma_20", current_price * 0.985))
+        supports = sorted(set(raw_supports + [round(vwap_poc, 2)]), reverse=True)
 
         # Path minimums, maximums, and terminal prices across the 5-day (10-step) simulation
         path_mins = np.min(simulated_paths[:, 1:], axis=1)
@@ -60,43 +70,49 @@ class EntryPointOptimizer:
         p80_high = float(np.percentile(path_maxs, 82))
 
         # -------------------------------------------------------------------------
-        # 1. MOST SUITABLE ENTRY POINT (Optimal Profit x Fill Probability)
+        # 1. MOST SUITABLE ENTRY POINT (Optimal Profit x Fill Probability, strictly post-fill t > t_fill)
         # -------------------------------------------------------------------------
-        # Evaluate a grid of candidate limit prices between (current_price - 1.6*ATR) and current_price
-        candidates = np.linspace(current_price - 1.50 * atr, current_price - 0.12 * atr, 28)
-        # Also include nearby technical support levels if within realistic 5-day pullback range
+        max_opt_ceil = current_price - max(0.28 * atr, current_price * 0.005)
+        min_opt_floor = current_price - 1.50 * atr
+        candidates = np.linspace(min_opt_floor, max_opt_ceil, 28)
         for s in supports:
-            if current_price - 1.8 * atr <= s <= current_price * 0.998:
+            if current_price - 1.80 * atr <= s <= max_opt_ceil:
                 candidates = np.append(candidates, s)
         candidates = np.unique(np.round(candidates, 2))
 
-        best_candidate = float(p40_low)
+        best_candidate = float(min(p40_low, max_opt_ceil))
         best_utility = -1e9
 
+        confluence_refs = [vwap_poc] + list(supports[:3])
+        if sma_20 < current_price * 0.998:
+            confluence_refs.append(sma_20)
+
         for cand in candidates:
-            # Check paths where price reaches or dips below `cand` at some step t, then measure max price AFTER step t
             hit_mask = path_mins <= cand
             fill_prob = float(np.mean(hit_mask))
-            if fill_prob < 0.28:
+            if fill_prob < 0.25:
                 continue
 
-            # Compute post-entry peak on filled paths
+            # Strictly evaluate post-fill peak and post-fill drawdown for steps t > t_fill
             post_entry_peaks = []
+            post_entry_troughs = []
             for p_idx in np.where(hit_mask)[0][:600]:
                 path = simulated_paths[p_idx, 1:]
                 first_hit_step = int(np.argmax(path <= cand))
-                subsequent_peak = float(np.max(path[first_hit_step:]))
-                post_entry_peaks.append(subsequent_peak)
+                # Strictly after the fill step (t > t_fill); if filled on the terminal step, only terminal price remains
+                post_slice = path[first_hit_step + 1 :] if (first_hit_step + 1) < len(path) else path[-1:]
+                post_entry_peaks.append(float(np.max(post_slice)))
+                post_entry_troughs.append(float(np.min(post_slice)))
 
             expected_peak = float(np.mean(post_entry_peaks)) if post_entry_peaks else p60_high
-            upside_dollars = max(expected_peak - cand, atr * 0.6)
-            stop_distance = max(1.15 * atr, cand - float(np.percentile(path_mins, 8)))
-            rr_ratio = upside_dollars / max(stop_distance, 0.5)
+            post_p10_trough = float(np.percentile(post_entry_troughs, 10)) if post_entry_troughs else p10_low
+            upside_dollars = max(expected_peak - cand, atr * 0.5)
+            stop_distance = max(1.10 * atr, cand - post_p10_trough)
+            rr_ratio = upside_dollars / max(stop_distance, 0.25 * atr)
 
-            # Bonus if candidate aligns closely with a technical support level, SMA20, or Volume POC
             confluence_bonus = 1.0
-            for ref_lvl in ([sma_20, vwap_poc] + list(supports[:2])):
-                if abs(cand - ref_lvl) / current_price <= 0.006:
+            for ref_lvl in confluence_refs:
+                if abs(cand - ref_lvl) / max(current_price, 1e-4) <= 0.006:
                     confluence_bonus = 1.12
                     break
 
@@ -105,13 +121,27 @@ class EntryPointOptimizer:
                 best_utility = utility
                 best_candidate = float(cand)
 
-        opt_entry_price = round(best_candidate, 2)
+        opt_entry_price = round(min(best_candidate, max_opt_ceil), 2)
         opt_fill_prob = round(float(np.mean(path_mins <= opt_entry_price)) * 100.0, 1)
         opt_discount_pct = round(((opt_entry_price - current_price) / current_price) * 100.0, 2)
 
-        # Primary and stretch targets for Optimal Entry
-        opt_primary_target = round(max(p60_high, opt_entry_price + 1.45 * atr), 2)
-        opt_stretch_target = round(max(p80_high, opt_entry_price + 2.35 * atr), 2)
+        # Compute post-fill distribution for the selected Optimal Entry
+        opt_hit_indices = np.where(path_mins <= opt_entry_price)[0]
+        if len(opt_hit_indices) > 0:
+            opt_post_peaks = []
+            for p_idx in opt_hit_indices:
+                path = simulated_paths[p_idx, 1:]
+                t_fill = int(np.argmax(path <= opt_entry_price))
+                post_s = path[t_fill + 1 :] if (t_fill + 1) < len(path) else path[-1:]
+                opt_post_peaks.append(float(np.max(post_s)))
+            post_p65_high = float(np.percentile(opt_post_peaks, 65))
+            post_p85_high = float(np.percentile(opt_post_peaks, 85))
+        else:
+            post_p65_high = p60_high
+            post_p85_high = p80_high
+
+        opt_primary_target = round(max(post_p65_high, opt_entry_price + 1.40 * atr), 2)
+        opt_stretch_target = round(max(post_p85_high, opt_primary_target + 0.90 * atr), 2)
         opt_stop_loss = round(opt_entry_price - 1.15 * atr, 2)
 
         opt_gain_pct = round(((opt_primary_target - opt_entry_price) / opt_entry_price) * 100.0, 2)
@@ -127,40 +157,51 @@ class EntryPointOptimizer:
             opt_timing = "Intraday VWAP Retest Window (Day 1–2)"
 
         # -------------------------------------------------------------------------
-        # 2. SAFEST ENTRY POINT (Maximum Margin of Safety & Structural Floor)
+        # 2. SAFEST ENTRY POINT (Maximum Margin of Safety & Below-Spot Structural Floor)
         # -------------------------------------------------------------------------
-        # Blend 20th-percentile simulated weekly low with nearest secondary support / Volume POC below Optimal Entry
         deeper_supports = [s for s in supports if s < opt_entry_price - 0.25 * atr]
         if deeper_supports:
             anchor_support = deeper_supports[0]
             safe_raw = 0.55 * p20_low + 0.45 * anchor_support
         else:
+            anchor_support = vwap_poc if vwap_poc < opt_entry_price else round(opt_entry_price - 0.85 * atr, 2)
             safe_raw = min(p20_low, opt_entry_price - 0.85 * atr)
 
-        safe_entry_price = round(min(safe_raw, opt_entry_price - 0.45 * atr), 2)
+        safe_entry_price = round(min(safe_raw, opt_entry_price - max(0.45 * atr, current_price * 0.006)), 2)
         safe_fill_prob = round(float(np.mean(path_mins <= safe_entry_price)) * 100.0, 1)
         safe_discount_pct = round(((safe_entry_price - current_price) / current_price) * 100.0, 2)
 
-        safe_target = round(max(current_price + 0.45 * atr, safe_entry_price + 1.55 * atr), 2)
+        safe_target = round(max(current_price + 0.35 * atr, safe_entry_price + 1.55 * atr), 2)
         safe_stop_loss = round(min(p10_low, safe_entry_price - 0.95 * atr), 2)
         safe_gain_pct = round(((safe_target - safe_entry_price) / safe_entry_price) * 100.0, 2)
         safe_risk_pct = round(((safe_entry_price - safe_stop_loss) / safe_entry_price) * 100.0, 2)
         safe_rr = round(safe_gain_pct / max(safe_risk_pct, 0.25), 2)
 
-        # Probability of ending the 5-day period in profit if filled at Safe Entry
-        filled_safe_mask = path_mins <= safe_entry_price
-        if np.any(filled_safe_mask):
-            win_prob_safe = float(
-                np.mean(np.max(simulated_paths[filled_safe_mask, 1:], axis=1) >= safe_entry_price * 1.015)
-            ) * 100.0
+        # Post-fill win probability (strictly evaluating steps t > t_fill after Safe Entry is reached)
+        safe_hit_indices = np.where(path_mins <= safe_entry_price)[0]
+        if len(safe_hit_indices) > 0:
+            post_fill_wins = []
+            for p_idx in safe_hit_indices:
+                path = simulated_paths[p_idx, 1:]
+                t_fill = int(np.argmax(path <= safe_entry_price))
+                post_s = path[t_fill + 1 :] if (t_fill + 1) < len(path) else path[-1:]
+                # Win if subsequent trajectory rebounds >= +1.5% above safe_entry_price or finishes above safe_entry_price
+                rebounded = (float(np.max(post_s)) >= safe_entry_price * 1.015) or (float(post_s[-1]) > safe_entry_price)
+                post_fill_wins.append(1.0 if rebounded else 0.0)
+            win_prob_safe = float(np.mean(post_fill_wins)) * 100.0
         else:
-            win_prob_safe = 84.0
-        safety_score = int(np.clip(round(win_prob_safe), 72, 96))
+            win_prob_safe = 78.0
+        safety_score = int(np.clip(round(win_prob_safe), 65, 96))
 
         # -------------------------------------------------------------------------
-        # 3. 3-TRANCHE EXECUTION LADDER
+        # 3. STRICTLY MONOTONIC 3-TRANCHE EXECUTION LADDER
+        #    Enforces: current_price > tactical_entry > opt_entry_price > safe_entry_price
         # -------------------------------------------------------------------------
-        tactical_entry = round(current_price - 0.18 * atr, 2)
+        tactical_raw = 0.55 * current_price + 0.45 * opt_entry_price
+        tactical_entry = round(
+            max(opt_entry_price + 0.05, min(current_price - 0.05, tactical_raw)),
+            2,
+        )
         blended_avg = round(0.30 * tactical_entry + 0.45 * opt_entry_price + 0.25 * safe_entry_price, 2)
 
         tranches: List[Dict[str, Any]] = [
@@ -170,7 +211,7 @@ class EntryPointOptimizer:
                 "limit_price": tactical_entry,
                 "discount_pct": round(((tactical_entry - current_price) / current_price) * 100.0, 2),
                 "fill_probability_pct": round(float(np.mean(path_mins <= tactical_entry)) * 100.0, 1),
-                "purpose": "Captures immediate upside if NVDA gaps & runs from Market Open without a deep pullback.",
+                "purpose": "Captures immediate upside if NVDA gaps & runs from Market Open with only a shallow dip.",
             },
             {
                 "tranche": "Tranche 2 — Most Suitable Core Entry (45%)",
@@ -178,7 +219,7 @@ class EntryPointOptimizer:
                 "limit_price": opt_entry_price,
                 "discount_pct": opt_discount_pct,
                 "fill_probability_pct": opt_fill_prob,
-                "purpose": "Highest expected Reward-to-Risk entry aligned with high-probability Day 1–2 dip.",
+                "purpose": "Highest post-fill expected Reward-to-Risk entry aligned with Day 1–2 pullback zone.",
             },
             {
                 "tranche": "Tranche 3 — Safest Institutional Floor (25%)",
@@ -205,9 +246,9 @@ class EntryPointOptimizer:
                 "max_risk_pct": opt_risk_pct,
                 "reward_to_risk_ratio": opt_rr,
                 "rationale": (
-                    f"Maximizes expected 1-week profit × fill probability ({opt_fill_prob:.0f}% chance of fill). "
-                    f"Sits {abs(opt_discount_pct):.2f}% below spot near key technical/VWAP support with a "
-                    f"{opt_rr:.2f}:1 Reward-to-Risk ratio toward ${opt_primary_target:.2f}."
+                    f"Maximizes post-fill 1-week profit × fill probability ({opt_fill_prob:.0f}% chance of fill). "
+                    f"Sits {abs(opt_discount_pct):.2f}% below spot near support node ${vwap_poc:.2f} with a "
+                    f"{opt_rr:.2f}:1 post-fill Reward-to-Risk ratio toward ${opt_primary_target:.2f}."
                 ),
             },
             "safest_entry": {
@@ -223,8 +264,8 @@ class EntryPointOptimizer:
                 "reward_to_risk_ratio": safe_rr,
                 "margin_of_safety_score": safety_score,
                 "rationale": (
-                    f"Anchored at the 20th-percentile simulated weekly floor and structural support "
-                    f"(Volume POC ${vwap_poc:.2f} / ATR band). Offers a {safety_score}% historical rebound probability "
+                    f"Anchored at the 20th-percentile simulated weekly floor and below-spot structural support "
+                    f"(${anchor_support:.2f} / Support POC ${vwap_poc:.2f}). Offers a {safety_score}% post-fill rebound probability "
                     f"with tight downside risk ({safe_risk_pct:.2f}% to stop)."
                 ),
             },

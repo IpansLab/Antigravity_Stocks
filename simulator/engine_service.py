@@ -32,8 +32,8 @@ class NVDAQuantService:
         force_refresh: bool = False,
         what_if_overrides: Optional[Dict[str, float]] = None,
     ) -> Dict[str, Any]:
-        """Fetches live NVDA market state, scores all 5 factors, ensures calibration, and runs full simulation."""
-        daily_df = self.fetcher.get_nvda_daily(force_refresh=force_refresh)
+        """Fetches live NVDA market state, scores all 5 factors, ensures 5Y calibration, and runs full simulation."""
+        daily_df = self.fetcher.get_nvda_daily(period="5y", force_refresh=force_refresh)
         intra_df = self.fetcher.get_nvda_intraday(force_refresh=force_refresh)
         session_info = self.fetcher.get_session_breakdown(force_refresh=force_refresh)
         multi_asset = self.fetcher.get_multi_asset_context(force_refresh=force_refresh)
@@ -41,8 +41,18 @@ class NVDAQuantService:
 
         current_price = float(session_info.get("current_price", 190.0))
 
-        # Ensure historical walk-forward warm-start has been executed
-        calibration_state = self.calibrator.ensure_warm_started(daily_df)
+        # Keep 5Y daily OHLCV table synchronized with latest daily bars
+        if not what_if_overrides:
+            self.db.upsert_historical_daily_prices(daily_df)
+
+        # Ensure 5-year historical walk-forward warm-start has been executed
+        state_check = self.db.get_latest_calibration_state()
+        peer_panel = None
+        if int(state_check.get("samples_evaluated", 0)) < 500 and len(daily_df) >= 200:
+            peer_panel = self.fetcher.get_historical_peer_panel(
+                daily_df.index, period="5y", force_refresh=force_refresh
+            )
+        calibration_state = self.calibrator.ensure_warm_started(daily_df, peer_panel=peer_panel)
         weights = dict(calibration_state.get("weights", {}))
 
         # Analyze Whale, Institutional 13F, Insider Form 4, and Block Volume Flows
@@ -94,8 +104,9 @@ class NVDAQuantService:
             what_if_overrides=what_if_overrides,
         )
 
-        calibration_history = self.db.get_calibration_history(limit=30)
-        candles_1d = self.fetcher.get_ohlcv_candles(timeframe="1D", limit=220, force_refresh=force_refresh)
+        calibration_history = self.db.get_calibration_history(limit=165)
+        candles_1d = self.fetcher.get_ohlcv_candles(timeframe="1D", limit=255, force_refresh=force_refresh)
+        db_status = self.db.get_database_status_summary()
 
         return {
             "generated_at": now_iso,
@@ -109,24 +120,30 @@ class NVDAQuantService:
                 "current_state": calibration_state,
                 "history": calibration_history,
             },
+            "database_status": db_status,
         }
 
     def trigger_self_tuning(self, recalibrate_backtest: bool = False) -> Dict[str, Any]:
         """
-        Triggers an explicit online self-tuning cycle comparing predictions with current NVDA market price
-        (and optionally re-running the walk-forward historical replay).
+        Triggers an explicit online self-tuning cycle comparing resolved predictions with actual NVDA market prices
+        (and optionally re-running the full 5-year walk-forward historical replay).
         """
-        daily_df = self.fetcher.get_nvda_daily(force_refresh=True)
+        daily_df = self.fetcher.get_nvda_daily(period="5y", force_refresh=True)
         intra_df = self.fetcher.get_nvda_intraday(force_refresh=True)
         session_info = self.fetcher.get_session_breakdown(force_refresh=False)
         multi_asset = self.fetcher.get_multi_asset_context(force_refresh=False)
         news_items = self.fetcher.get_news_headlines(force_refresh=False)
         current_price = float(session_info.get("current_price", 190.0))
 
-        if recalibrate_backtest:
-            self.calibrator.run_walk_forward_backtest(daily_df, lookback_days=45)
-
         state_before = self.db.get_latest_calibration_state()
+        if recalibrate_backtest:
+            peer_panel = self.fetcher.get_historical_peer_panel(
+                daily_df.index, period="5y", force_refresh=False
+            )
+            self.calibrator.run_walk_forward_backtest(
+                daily_df, lookback_days=None, peer_panel=peer_panel
+            )
+
         whale_data = self.whale_tracker.analyze_whale_activity(daily_df, intra_df, current_price)
         factor_result = self.factor_engine.compute_live_factors(
             daily_df=daily_df,
@@ -148,5 +165,6 @@ class NVDAQuantService:
             "current_price": current_price,
             "previous_state": state_before,
             "updated_state": updated_state,
-            "history": self.db.get_calibration_history(limit=30),
+            "history": self.db.get_calibration_history(limit=165),
+            "database_status": self.db.get_database_status_summary(),
         }

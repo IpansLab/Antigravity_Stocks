@@ -30,7 +30,7 @@ def main() -> None:
     parser.add_argument(
         "--recalibrate-backtest",
         action="store_true",
-        help="Re-run full 45-day walk-forward historical calibration",
+        help="Re-run full 5-year (2021-2026) walk-forward historical calibration and update SQLite database",
     )
     parser.add_argument(
         "--whale-buy-musd",
@@ -53,7 +53,7 @@ def main() -> None:
     parser.add_argument(
         "--export-snapshot",
         action="store_true",
-        help="Export latest calibration history and forecast JSON files to data/",
+        help="Export latest 5Y calibration history, database status, and forecast JSON files to data/",
     )
     parser.add_argument("--json", action="store_true", help="Output full payload as JSON")
     args = parser.parse_args()
@@ -65,10 +65,10 @@ def main() -> None:
         if not args.json:
             st = tune_res["updated_state"]
             print("=" * 84)
-            print(" [SELF-TUNING CALIBRATION EXECUTED]")
+            print(" [SELF-TUNING 5-YEAR CALIBRATION EXECUTED]")
             print(f" Step Type : {st['step_type']} | Samples Evaluated: {st['samples_evaluated']}")
             print(
-                f" Accuracy  : Rolling MAE ${st['rolling_mae']:.2f} (vs Uncalibrated ${st['baseline_mae']:.2f}) "
+                f" Accuracy  : 30D Rolling MAE ${st['rolling_mae']:.2f} (vs RW Baseline ${st['baseline_mae']:.2f}) "
                 f"| MAPE {st['rolling_mape']:.2f}% | Directional Hit Rate {st['directional_accuracy']:.1f}%"
             )
             print(f" Notes     : {st.get('notes', '')}")
@@ -87,12 +87,13 @@ def main() -> None:
         what_if_overrides=overrides if overrides else None,
     )
 
-    if args.export_snapshot or args.fine_tune:
+    if args.export_snapshot or args.fine_tune or args.recalibrate_backtest:
         import os
         data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
         cal_export = {
             "updated_at": payload["generated_at"],
             "current_calibration_state": payload["calibration"]["current_state"],
+            "database_status": payload.get("database_status", {}),
             "weight_evolution_history": payload["calibration"]["history"],
             "recent_predictions_vs_actuals": payload["simulation"]["live_vs_simulated"]["historical_comparison_series"],
         }
@@ -101,12 +102,15 @@ def main() -> None:
             "symbol": "NVDA",
             "current_price": payload["market"]["current_price"],
             "active_session": payload["market"]["active_session"],
+            "regular_change_pct": payload["market"].get("regular_change_pct", 0.0),
+            "extended_change_pct": payload["market"].get("extended_change_pct", 0.0),
             "composite_score": payload["factors"]["composite_score"],
             "composite_label": payload["factors"]["composite_label"],
             "factor_scores": payload["factors"]["scores"],
             "short_term_horizons": payload["simulation"]["short_term_horizons"],
             "one_week_forecast": payload["simulation"]["one_week_forecast"],
             "entry_recommendations": payload["simulation"]["entry_recommendations"],
+            "database_status": payload.get("database_status", {}),
         }
         with open(os.path.join(data_dir, "calibration_history.json"), "w", encoding="utf-8") as f_cal:
             json.dump(cal_export, f_cal, indent=2)

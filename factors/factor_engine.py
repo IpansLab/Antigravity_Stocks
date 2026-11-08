@@ -191,15 +191,100 @@ class MultiFactorEngine:
             "news_sentiment": news_sentiment,
         }
 
+    @staticmethod
+    def compute_causal_technical_score(
+        closes_arr: np.ndarray,
+        highs_arr: np.ndarray,
+        lows_arr: np.ndarray,
+        current_price: float | None = None,
+    ) -> Dict[str, float]:
+        """
+        Shared causal technical indicator & sentiment score calculation used identically by
+        both historical walk-forward calibration and live inference (guaranteeing +1.00 train-serve parity
+        and scale invariance across NVDA's 5-year $11.23–$239.24 split-adjusted price range).
+        """
+        n = len(closes_arr)
+        c = float(current_price if current_price is not None else (closes_arr[-1] if n > 0 else 190.0))
+        if n < 5:
+            return {
+                "technical_score": 0.0,
+                "rsi_14": 50.0,
+                "macd_line": 0.0,
+                "macd_signal": 0.0,
+                "macd_hist": 0.0,
+                "sma_20": c,
+                "sma_50": c,
+                "atr_14": max(0.03 * c, 1e-4),
+            }
+
+        # Use trailing window up to 65 bars for fast, exact causal indicator computation
+        win = min(n, 65)
+        c_s = pd.Series(closes_arr[-win:], dtype=float)
+        h_s = pd.Series(highs_arr[-win:], dtype=float)
+        l_s = pd.Series(lows_arr[-win:], dtype=float)
+
+        # RSI(14)
+        delta = c_s.diff()
+        gain = delta.clip(lower=0.0).rolling(14, min_periods=1).mean()
+        loss = (-delta.clip(upper=0.0)).rolling(14, min_periods=1).mean()
+        rs = gain / loss.replace(0, np.nan)
+        rsi_series = 100.0 - (100.0 / (1.0 + rs))
+        rsi_14 = float(rsi_series.iloc[-1]) if not np.isnan(rsi_series.iloc[-1]) else 50.0
+
+        # MACD (12, 26, 9)
+        ema12 = c_s.ewm(span=12, adjust=False).mean()
+        ema26 = c_s.ewm(span=26, adjust=False).mean()
+        macd_line_s = ema12 - ema26
+        macd_sig_s = macd_line_s.ewm(span=9, adjust=False).mean()
+        macd_line_val = float(macd_line_s.iloc[-1])
+        macd_sig_val = float(macd_sig_s.iloc[-1])
+        macd_hist = float(macd_line_val - macd_sig_val)
+
+        # Moving Averages
+        sma_20 = float(c_s.tail(20).mean())
+        sma_50 = float(c_s.tail(50).mean()) if len(c_s) >= 20 else sma_20
+
+        # ATR(14) with scale-invariant relative floor (0.5% of price instead of hardcoded $1.00)
+        prev_c = c_s.shift(1)
+        tr = pd.concat(
+            [(h_s - l_s), (h_s - prev_c).abs(), (l_s - prev_c).abs()],
+            axis=1,
+        ).max(axis=1)
+        atr_floor = max(0.005 * c, 1e-4)
+        atr_14 = max(float(tr.tail(14).mean() or (c * 0.03)), atr_floor)
+
+        trend_sig = np.tanh(((c - sma_20) / atr_14) * 0.5) + 0.5 * np.tanh(
+            ((sma_20 - sma_50) / atr_14) * 0.5
+        )
+        macd_sig_norm = np.tanh(macd_hist / max(atr_14 * 0.25, 0.00125 * c, 1e-5))
+        if rsi_14 < 38.0:
+            rsi_sig = (38.0 - rsi_14) / 25.0
+        elif rsi_14 > 72.0:
+            rsi_sig = -(rsi_14 - 72.0) / 25.0
+        else:
+            rsi_sig = (rsi_14 - 50.0) / 45.0
+
+        tech_score = float(np.clip(0.45 * trend_sig + 0.35 * macd_sig_norm + 0.20 * rsi_sig, -1.0, 1.0))
+        return {
+            "technical_score": tech_score,
+            "rsi_14": rsi_14,
+            "macd_line": macd_line_val,
+            "macd_signal": macd_sig_val,
+            "macd_hist": macd_hist,
+            "sma_20": sma_20,
+            "sma_50": sma_50,
+            "atr_14": atr_14,
+        }
+
     def compute_technical_structure(self, daily_df: pd.DataFrame, current_price: float) -> Dict[str, Any]:
         """Calculates RSI, MACD, ATR, Bollinger Bands, Volume Profile HVNs, and Support/Resistance levels."""
         if daily_df.empty or len(daily_df) < 20:
             return {
-                "technical_score": 0.10,
-                "rsi_14": 52.0,
-                "macd_line": 0.5,
-                "macd_signal": 0.4,
-                "macd_hist": 0.1,
+                "technical_score": 0.0,
+                "rsi_14": 50.0,
+                "macd_line": 0.0,
+                "macd_signal": 0.0,
+                "macd_hist": 0.0,
                 "sma_20": round(current_price * 0.985, 2),
                 "sma_50": round(current_price * 0.955, 2),
                 "bb_upper": round(current_price * 1.06, 2),
@@ -208,6 +293,7 @@ class MultiFactorEngine:
                 "daily_volatility": 0.028,
                 "annualized_volatility": 0.44,
                 "volume_poc": round(current_price * 0.97, 2),
+                "support_volume_poc": round(current_price * 0.97, 2),
                 "support_levels": [round(current_price * 0.97, 2), round(current_price * 0.94, 2), round(current_price * 0.91, 2)],
                 "resistance_levels": [round(current_price * 1.03, 2), round(current_price * 1.06, 2), round(current_price * 1.10, 2)],
                 "fib_382": round(current_price * 0.968, 2),
@@ -219,35 +305,23 @@ class MultiFactorEngine:
         lows = daily_df["Low"].astype(float)
         vols = daily_df["Volume"].astype(float)
 
-        # RSI(14)
-        delta = closes.diff()
-        gain = delta.clip(lower=0.0).rolling(14).mean()
-        loss = (-delta.clip(upper=0.0)).rolling(14).mean()
-        rs = gain / loss.replace(0, np.nan)
-        rsi_series = 100.0 - (100.0 / (1.0 + rs))
-        rsi_14 = float(rsi_series.iloc[-1]) if not np.isnan(rsi_series.iloc[-1]) else 50.0
+        core = self.compute_causal_technical_score(
+            closes.values, highs.values, lows.values, current_price=current_price
+        )
+        rsi_14 = core["rsi_14"]
+        macd_line_val = core["macd_line"]
+        macd_sig_val = core["macd_signal"]
+        macd_hist = core["macd_hist"]
+        sma_20 = core["sma_20"]
+        sma_50 = core["sma_50"]
+        atr_14 = core["atr_14"]
+        tech_score = core["technical_score"]
 
-        # MACD (12, 26, 9)
-        ema12 = closes.ewm(span=12, adjust=False).mean()
-        ema26 = closes.ewm(span=26, adjust=False).mean()
-        macd_line = ema12 - ema26
-        macd_sig = macd_line.ewm(span=9, adjust=False).mean()
-        macd_hist = float((macd_line - macd_sig).iloc[-1])
-
-        # Moving Averages & Bollinger Bands
-        sma_20 = float(closes.tail(20).mean())
-        sma_50 = float(closes.tail(50).mean()) if len(closes) >= 50 else sma_20
         std_20 = float(closes.tail(20).std() or (current_price * 0.025))
         bb_upper = sma_20 + 2.0 * std_20
         bb_lower = sma_20 - 2.0 * std_20
 
-        # ATR(14) & realized volatility
-        prev_c = closes.shift(1)
-        tr = pd.concat(
-            [(highs - lows), (highs - prev_c).abs(), (lows - prev_c).abs()],
-            axis=1,
-        ).max(axis=1)
-        atr_14 = float(tr.tail(14).mean() or (current_price * 0.03))
+        # Realized volatility (RiskMetrics EWMA blended with 30-day sample std)
         log_rets = np.log(closes / closes.shift(1)).dropna()
         daily_vol = float(log_rets.tail(30).std() or 0.028)
         ann_vol = daily_vol * np.sqrt(252.0)
@@ -261,6 +335,15 @@ class MultiFactorEngine:
         poc_idx = int(np.argmax(hist_v))
         volume_poc = float(bin_centers[poc_idx])
 
+        # Also identify the strongest Volume Profile node strictly below current_price for support anchoring
+        below_mask = bin_centers < current_price * 0.995
+        if np.any(below_mask):
+            below_centers = bin_centers[below_mask]
+            below_weights = hist_v[below_mask]
+            support_volume_poc = float(below_centers[int(np.argmax(below_weights))])
+        else:
+            support_volume_poc = float(current_price - 0.95 * atr_14)
+
         # 30-day Swing High / Low & Fibonacci retracements
         swing_high_30 = float(highs.tail(30).max())
         swing_low_30 = float(lows.tail(30).min())
@@ -269,12 +352,12 @@ class MultiFactorEngine:
         fib_500 = swing_high_30 - 0.500 * swing_range
         fib_618 = swing_high_30 - 0.618 * swing_range
 
-        # Build sorted support levels below current_price and resistance levels above current_price
+        # Build sorted support levels strictly below current_price and resistance levels above current_price
         candidate_supports = [
             sma_20,
             sma_50,
             bb_lower,
-            volume_poc,
+            support_volume_poc,
             fib_382,
             fib_500,
             fib_618,
@@ -283,6 +366,9 @@ class MultiFactorEngine:
             current_price - 1.65 * atr_14,
             current_price - 2.40 * atr_14,
         ]
+        if volume_poc < current_price * 0.998:
+            candidate_supports.append(volume_poc)
+
         supports_below = sorted(
             {round(p, 2) for p in candidate_supports if p < current_price * 0.998},
             reverse=True,
@@ -290,7 +376,7 @@ class MultiFactorEngine:
         # Filter so levels are spaced by at least ~0.8%
         filtered_supports: List[float] = []
         for s in supports_below:
-            if not filtered_supports or (filtered_supports[-1] - s) / current_price >= 0.008:
+            if not filtered_supports or (filtered_supports[-1] - s) / max(current_price, 1e-4) >= 0.008:
                 filtered_supports.append(s)
         if len(filtered_supports) < 3:
             filtered_supports = [
@@ -307,12 +393,15 @@ class MultiFactorEngine:
             current_price + 2.0 * atr_14,
             current_price + 3.0 * atr_14,
         ]
+        if volume_poc > current_price * 1.002:
+            candidate_resistances.append(volume_poc)
+
         resistances_above = sorted(
             {round(p, 2) for p in candidate_resistances if p > current_price * 1.002}
         )
         filtered_resistances: List[float] = []
         for r in resistances_above:
-            if not filtered_resistances or (r - filtered_resistances[-1]) / current_price >= 0.008:
+            if not filtered_resistances or (r - filtered_resistances[-1]) / max(current_price, 1e-4) >= 0.008:
                 filtered_resistances.append(r)
         if len(filtered_resistances) < 3:
             filtered_resistances = [
@@ -321,27 +410,11 @@ class MultiFactorEngine:
                 round(current_price + 3.4 * atr_14, 2),
             ]
 
-        # Score technical structure in [-1.0, +1.0]
-        # Trend alignment + MACD momentum + mean-reversion bonus when oversold (RSI < 38)
-        trend_sig = np.tanh(((current_price - sma_20) / max(atr_14, 1.0)) * 0.5) + 0.5 * np.tanh(
-            ((sma_20 - sma_50) / max(atr_14, 1.0)) * 0.5
-        )
-        macd_sig_norm = np.tanh(macd_hist / max(atr_14 * 0.25, 0.1))
-        # Oversold bounce potential vs overbought exhaustion
-        if rsi_14 < 38.0:
-            rsi_sig = (38.0 - rsi_14) / 25.0  # Bullish mean-reversion coiled spring
-        elif rsi_14 > 72.0:
-            rsi_sig = -(rsi_14 - 72.0) / 25.0  # Overbought pullback risk
-        else:
-            rsi_sig = (rsi_14 - 50.0) / 45.0
-
-        tech_score = float(np.clip(0.45 * trend_sig + 0.35 * macd_sig_norm + 0.20 * rsi_sig, -1.0, 1.0))
-
         return {
             "technical_score": round(tech_score, 4),
             "rsi_14": round(rsi_14, 2),
-            "macd_line": round(float(macd_line.iloc[-1]), 3),
-            "macd_signal": round(float(macd_sig.iloc[-1]), 3),
+            "macd_line": round(macd_line_val, 3),
+            "macd_signal": round(macd_sig_val, 3),
             "macd_hist": round(macd_hist, 3),
             "sma_20": round(sma_20, 2),
             "sma_50": round(sma_50, 2),
@@ -351,6 +424,7 @@ class MultiFactorEngine:
             "daily_volatility": round(daily_vol, 4),
             "annualized_volatility": round(ann_vol, 4),
             "volume_poc": round(volume_poc, 2),
+            "support_volume_poc": round(support_volume_poc, 2),
             "swing_high_30d": round(swing_high_30, 2),
             "swing_low_30d": round(swing_low_30, 2),
             "fib_382": round(fib_382, 2),
@@ -363,7 +437,7 @@ class MultiFactorEngine:
     @staticmethod
     def score_news_sentiment(news_items: List[Dict[str, str]]) -> Dict[str, Any]:
         if not news_items:
-            return {"sentiment_score": 0.12, "bullish_hits": 2, "bearish_hits": 1, "scored_articles": []}
+            return {"sentiment_score": 0.0, "bullish_hits": 0, "bearish_hits": 0, "scored_articles": []}
 
         bull_total = 0
         bear_total = 0
