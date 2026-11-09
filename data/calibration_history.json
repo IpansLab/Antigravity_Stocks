@@ -1,89 +1,89 @@
 {
-  "updated_at": "2026-11-08T14:12:22.866487+00:00",
+  "updated_at": "2026-11-09T23:00:34.964639+00:00",
   "current_calibration_state": {
-    "id": 322,
-    "updated_at": "2026-11-05T00:00:00-05:00",
-    "step_type": "WARM_START_WALK_FORWARD",
-    "bias_drift": -0.001194,
+    "id": 323,
+    "updated_at": "2026-11-09T23:00:33.857386+00:00",
+    "step_type": "LIVE_ERROR_FINE_TUNE",
+    "bias_drift": -0.0035,
     "vol_multiplier": 0.8435,
     "learning_rate": 0.045,
-    "rolling_mae": 3.89,
-    "rolling_mape": 1.89,
-    "directional_accuracy": 51.5,
-    "baseline_mae": 4.16,
-    "samples_evaluated": 2460,
-    "notes": "5Y walk-forward through 2026-11-06: 30D MAE $3.89 (vs RW baseline $4.16), 5Y OOS MAPE 2.49%, Hit Rate 51.5%.",
+    "rolling_mae": 4.08,
+    "rolling_mape": 1.97,
+    "directional_accuracy": 53.3,
+    "baseline_mae": 4.3,
+    "samples_evaluated": 2462,
+    "notes": "Causal live fine-tune (2 newly resolved predictions, residual -3.90%): updated weights & bounded drift bias (-0.350%).",
     "q68_conformal": 0.9482,
     "q95_conformal": 1.9554,
     "weights": {
-      "whale_institutional": 0.4517,
-      "overnight_premarket": 0.1694,
-      "sector_peers": 0.0953,
-      "macro_regime": 0.1822,
-      "technical_sentiment": 0.1013
+      "whale_institutional": 0.4509,
+      "overnight_premarket": 0.1613,
+      "sector_peers": 0.0888,
+      "macro_regime": 0.1867,
+      "technical_sentiment": 0.1122
     }
   },
   "database_status": {
     "db_file": "nvda_tracker.db",
     "db_path": "data/nvda_tracker.db",
-    "db_size_kb": 1560.0,
+    "db_size_kb": 1584.0,
     "last_updated_at": "2026-11-08T14:02:34.716255+00:00",
     "history_window": "5Y (5-Year Walk-Forward Run \u00b7 2021\u20132026)",
     "date_range": {
       "start": "2021-11-08",
-      "end": "2026-11-06",
-      "trading_days": 1255,
+      "end": "2026-11-09",
+      "trading_days": 1256,
       "min_close_price": 11.23,
       "max_close_price": 239.24
     },
     "table_counts": {
       "historical_daily_prices": {
-        "rows": 1255,
+        "rows": 1256,
         "start_date": "2021-11-08",
-        "end_date": "2026-11-06"
-      },
-      "predictions": {
-        "rows": 2467,
-        "backtest_5y_rows": 2460,
-        "live_rows": 7,
-        "resolved_rows": 2465,
-        "calibrated_rows": 2465,
-        "start_date": "2021-12-14",
         "end_date": "2026-11-09"
       },
+      "predictions": {
+        "rows": 2469,
+        "backtest_5y_rows": 2460,
+        "live_rows": 9,
+        "resolved_rows": 2467,
+        "calibrated_rows": 2467,
+        "start_date": "2021-12-14",
+        "end_date": "2026-11-10"
+      },
       "model_calibration_state": {
-        "rows": 163,
-        "latest_step_type": "WARM_START_WALK_FORWARD",
-        "samples_evaluated": 2460
+        "rows": 164,
+        "latest_step_type": "LIVE_ERROR_FINE_TUNE",
+        "samples_evaluated": 2462
       },
       "backtest_runs_audit": {
         "rows": 2
       },
       "whale_events": {
-        "rows": 34
+        "rows": 43
       },
       "price_snapshots": {
-        "rows": 13
+        "rows": 37
       },
       "factor_snapshots": {
-        "rows": 13
+        "rows": 37
       }
     },
     "change_delta": {
       "prev_history_window": "1Y Fetch / 40-Day Backtest (2026-09-11 to 2026-11-06)",
-      "new_history_window": "5Y Full Walk-Forward (2021-11-08 to 2026-11-06)",
+      "new_history_window": "5Y Full Walk-Forward (2021-11-08 to 2026-11-09)",
       "prev_daily_bars_stored": 0,
-      "new_daily_bars_stored": 1255,
+      "new_daily_bars_stored": 1256,
       "prev_predictions_count": 90,
-      "new_predictions_count": 2467,
-      "predictions_added": 2377,
+      "new_predictions_count": 2469,
+      "predictions_added": 2379,
       "prev_calibration_count": 13,
-      "new_calibration_count": 163,
-      "calibration_checkpoints_added": 150,
+      "new_calibration_count": 164,
+      "calibration_checkpoints_added": 151,
       "prev_samples_evaluated": 89,
-      "new_samples_evaluated": 2460,
+      "new_samples_evaluated": 2462,
       "prev_db_size_kb": 112.0,
-      "new_db_size_kb": 1560.0
+      "new_db_size_kb": 1584.0
     },
     "latest_5y_audit": {
       "id": 2,
@@ -3953,23 +3953,32 @@
         "macro_regime": 0.1822,
         "technical_sentiment": 0.1013
       }
+    },
+    {
+      "id": 323,
+      "updated_at": "2026-11-09T23:00:33.857386+00:00",
+      "step_type": "LIVE_ERROR_FINE_TUNE",
+      "bias_drift": -0.0035,
+      "vol_multiplier": 0.8435,
+      "learning_rate": 0.045,
+      "rolling_mae": 4.08,
+      "rolling_mape": 1.97,
+      "directional_accuracy": 53.3,
+      "baseline_mae": 4.3,
+      "samples_evaluated": 2462,
+      "notes": "Causal live fine-tune (2 newly resolved predictions, residual -3.90%): updated weights & bounded drift bias (-0.350%).",
+      "q68_conformal": 0.9482,
+      "q95_conformal": 1.9554,
+      "weights": {
+        "whale_institutional": 0.4509,
+        "overnight_premarket": 0.1613,
+        "sector_peers": 0.0888,
+        "macro_regime": 0.1867,
+        "technical_sentiment": 0.1122
+      }
     }
   ],
   "recent_predictions_vs_actuals": [
-    {
-      "date": "2026-08-14",
-      "horizon": "DAILY_CLOSE",
-      "base_price": 225.3,
-      "predicted_price": 227.58,
-      "actual_price": 225.16,
-      "low_68": 221.12,
-      "high_68": 234.23,
-      "low_95": 213.36,
-      "high_95": 242.75,
-      "abs_error": 2.42,
-      "pct_error": 1.07,
-      "direction_correct": false
-    },
     {
       "date": "2026-08-17",
       "horizon": "DAILY_CLOSE",
@@ -4795,6 +4804,20 @@
       "abs_error": 8.31,
       "pct_error": 4.45,
       "direction_correct": false
+    },
+    {
+      "date": "2026-11-09",
+      "horizon": "DAILY_CLOSE",
+      "base_price": 186.64,
+      "predicted_price": 185.95,
+      "actual_price": 178.67,
+      "low_68": 182.07,
+      "high_68": 189.92,
+      "low_95": 178.03,
+      "high_95": 194.23,
+      "abs_error": 7.28,
+      "pct_error": 4.07,
+      "direction_correct": true
     }
   ]
 }
