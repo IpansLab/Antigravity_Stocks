@@ -1,76 +1,76 @@
 {
-  "generated_at": "2026-11-11T01:15:01.562217+00:00",
+  "generated_at": "2026-11-11T08:58:20.763301+00:00",
   "symbol": "NVDA",
   "current_price": 168.89,
   "active_session": "OVERNIGHT",
-  "regular_change_pct": -4.27,
-  "extended_change_pct": -5.47,
-  "composite_score": -0.0032,
+  "regular_change_pct": -5.47,
+  "extended_change_pct": 0.0,
+  "composite_score": 0.0227,
   "composite_label": "NEUTRAL / BALANCED",
   "factor_scores": {
-    "whale_institutional": 0.1684,
-    "overnight_premarket": -0.2979,
-    "sector_peers": 0.6411,
-    "macro_regime": -0.1633,
-    "technical_sentiment": -0.4301
+    "whale_institutional": 0.024,
+    "overnight_premarket": 0.4161,
+    "sector_peers": -0.2148,
+    "macro_regime": 0.0185,
+    "technical_sentiment": -0.3412
   },
   "short_term_horizons": {
     "overnight": {
       "title": "Overnight Market Session (20:00\u201304:00 ET)",
       "horizon_type": "OVERNIGHT",
       "base_price": 168.89,
-      "predicted_price": 168.58,
-      "predicted_change_dollars": -0.31,
-      "predicted_return_pct": -0.18,
-      "direction": "BEARISH",
-      "low_68": 167.21,
-      "high_68": 169.97,
-      "low_95": 165.77,
-      "high_95": 171.45,
+      "predicted_price": 169.02,
+      "predicted_change_dollars": 0.13,
+      "predicted_return_pct": 0.08,
+      "direction": "BULLISH",
+      "low_68": 167.57,
+      "high_68": 170.48,
+      "low_95": 166.05,
+      "high_95": 172.04,
       "driver_summary": "Driven by post-market whale flow, NQ=F futures, and TSMC Asian session lead."
     },
     "market_open": {
       "title": "Next Market Open (09:30 ET Opening Bell)",
       "horizon_type": "MARKET_OPEN",
       "base_price": 168.89,
-      "predicted_price": 168.68,
-      "predicted_change_dollars": -0.21,
-      "predicted_return_pct": -0.12,
-      "direction": "BEARISH",
-      "low_68": 166.66,
-      "high_68": 170.73,
-      "low_95": 164.54,
-      "high_95": 172.92,
+      "predicted_price": 168.91,
+      "predicted_change_dollars": 0.02,
+      "predicted_return_pct": 0.01,
+      "direction": "FLAT",
+      "low_68": 166.79,
+      "high_68": 171.07,
+      "low_95": 164.56,
+      "high_95": 173.39,
       "driver_summary": "Driven by pre-market volume accumulation, institutional block orders, and SMH/Nasdaq futures."
     },
     "intraday_close": {
       "title": "Full Session Close (16:00 ET)",
       "horizon_type": "DAILY_CLOSE",
       "base_price": 168.89,
-      "predicted_price": 168.29,
-      "predicted_change_dollars": -0.6,
-      "predicted_return_pct": -0.36,
+      "predicted_price": 168.38,
+      "predicted_change_dollars": -0.51,
+      "predicted_return_pct": -0.3,
       "direction": "BEARISH",
-      "low_68": 164.7,
-      "high_68": 171.95,
-      "low_95": 160.98,
-      "high_95": 175.92,
+      "low_68": 164.61,
+      "high_68": 172.24,
+      "low_95": 160.7,
+      "high_95": 176.43,
       "driver_summary": "Driven by full 5-factor calibrated composite score + intraday institutional VWAP flow."
     }
   },
   "one_week_forecast": {
     "horizon_trading_days": 5,
-    "end_of_week_target": 167.46,
-    "expected_weekly_return_pct": -0.84,
-    "expected_weekly_high": 174.24,
-    "expected_weekly_low": 161.14,
-    "weekly_bullish_probability_pct": 42.1,
+    "end_of_week_target": 167.8,
+    "expected_weekly_return_pct": -0.64,
+    "expected_weekly_high": 174.74,
+    "expected_weekly_low": 161.06,
+    "weekly_bullish_probability_pct": 44.1,
     "trend_regime": "MILD CONSOLIDATION / DIP",
     "timeline": [
       {
         "step": 0,
         "label": "Current Spot",
-        "date": "2026-11-10",
+        "date": "2026-11-11",
         "session": "OVERNIGHT",
         "median": 168.89,
         "mean": 168.89,
@@ -85,130 +85,130 @@
         "label": "D1 Open (Wed Nov 11)",
         "date": "2026-11-11",
         "session": "MARKET_OPEN",
-        "median": 168.68,
-        "mean": 168.76,
-        "low_68": 166.63,
-        "high_68": 170.9,
-        "low_90": 165.45,
-        "high_90": 172.49,
-        "return_pct": -0.12
+        "median": 168.91,
+        "mean": 169.0,
+        "low_68": 166.76,
+        "high_68": 171.23,
+        "low_90": 165.51,
+        "high_90": 172.92,
+        "return_pct": 0.01
       },
       {
         "step": 2,
         "label": "D1 Close (Wed Nov 11)",
         "date": "2026-11-11",
         "session": "DAILY_CLOSE",
-        "median": 168.29,
-        "mean": 168.38,
-        "low_68": 164.85,
-        "high_68": 172.02,
-        "low_90": 162.55,
-        "high_90": 174.62,
-        "return_pct": -0.36
+        "median": 168.38,
+        "mean": 168.47,
+        "low_68": 164.75,
+        "high_68": 172.28,
+        "low_90": 162.35,
+        "high_90": 174.97,
+        "return_pct": -0.3
       },
       {
         "step": 3,
         "label": "D2 Open (Thu Nov 12)",
         "date": "2026-11-12",
         "session": "MARKET_OPEN",
-        "median": 168.12,
-        "mean": 168.23,
-        "low_68": 164.29,
-        "high_68": 172.29,
-        "low_90": 161.62,
-        "high_90": 175.13,
-        "return_pct": -0.46
+        "median": 168.25,
+        "mean": 168.37,
+        "low_68": 164.16,
+        "high_68": 172.65,
+        "low_90": 161.42,
+        "high_90": 175.64,
+        "return_pct": -0.38
       },
       {
         "step": 4,
         "label": "D2 Close (Thu Nov 12)",
         "date": "2026-11-12",
         "session": "DAILY_CLOSE",
-        "median": 167.98,
-        "mean": 167.96,
-        "low_68": 163.02,
-        "high_68": 172.87,
-        "low_90": 160.28,
-        "high_90": 175.89,
-        "return_pct": -0.54
+        "median": 168.11,
+        "mean": 168.13,
+        "low_68": 162.96,
+        "high_68": 173.25,
+        "low_90": 160.07,
+        "high_90": 176.46,
+        "return_pct": -0.46
       },
       {
         "step": 5,
         "label": "D3 Open (Fri Nov 13)",
         "date": "2026-11-13",
         "session": "MARKET_OPEN",
-        "median": 167.66,
-        "mean": 167.81,
-        "low_68": 162.8,
-        "high_68": 172.99,
-        "low_90": 159.5,
-        "high_90": 176.66,
-        "return_pct": -0.73
+        "median": 167.85,
+        "mean": 167.99,
+        "low_68": 162.71,
+        "high_68": 173.41,
+        "low_90": 159.34,
+        "high_90": 177.27,
+        "return_pct": -0.62
       },
       {
         "step": 6,
         "label": "D3 Close (Fri Nov 13)",
         "date": "2026-11-13",
         "session": "DAILY_CLOSE",
-        "median": 167.43,
-        "mean": 167.68,
-        "low_68": 161.97,
-        "high_68": 173.45,
-        "low_90": 158.58,
-        "high_90": 177.2,
-        "return_pct": -0.86
+        "median": 167.62,
+        "mean": 167.89,
+        "low_68": 161.9,
+        "high_68": 173.9,
+        "low_90": 158.34,
+        "high_90": 177.9,
+        "return_pct": -0.75
       },
       {
         "step": 7,
         "label": "D4 Open (Mon Nov 16)",
         "date": "2026-11-16",
         "session": "MARKET_OPEN",
-        "median": 167.49,
-        "mean": 167.61,
-        "low_68": 161.72,
-        "high_68": 173.4,
-        "low_90": 158.28,
-        "high_90": 177.29,
-        "return_pct": -0.83
+        "median": 167.75,
+        "mean": 167.83,
+        "low_68": 161.63,
+        "high_68": 173.88,
+        "low_90": 158.07,
+        "high_90": 177.98,
+        "return_pct": -0.67
       },
       {
         "step": 8,
         "label": "D4 Close (Mon Nov 16)",
         "date": "2026-11-16",
         "session": "DAILY_CLOSE",
-        "median": 167.45,
-        "mean": 167.55,
-        "low_68": 161.1,
-        "high_68": 173.79,
-        "low_90": 157.3,
-        "high_90": 178.33,
-        "return_pct": -0.86
+        "median": 167.71,
+        "mean": 167.8,
+        "low_68": 160.99,
+        "high_68": 174.28,
+        "low_90": 157.06,
+        "high_90": 179.06,
+        "return_pct": -0.7
       },
       {
         "step": 9,
         "label": "D5 Open (Tue Nov 17)",
         "date": "2026-11-17",
         "session": "MARKET_OPEN",
-        "median": 167.42,
-        "mean": 167.54,
-        "low_68": 161.03,
-        "high_68": 173.82,
-        "low_90": 156.89,
-        "high_90": 178.69,
-        "return_pct": -0.87
+        "median": 167.64,
+        "mean": 167.81,
+        "low_68": 160.98,
+        "high_68": 174.39,
+        "low_90": 156.63,
+        "high_90": 179.42,
+        "return_pct": -0.74
       },
       {
         "step": 10,
         "label": "D5 Close (Tue Nov 17)",
         "date": "2026-11-17",
         "session": "DAILY_CLOSE",
-        "median": 167.46,
-        "mean": 167.47,
-        "low_68": 160.44,
-        "high_68": 174.42,
-        "low_90": 156.41,
-        "high_90": 179.42,
-        "return_pct": -0.84
+        "median": 167.8,
+        "mean": 167.77,
+        "low_68": 160.4,
+        "high_68": 175.04,
+        "low_90": 156.21,
+        "high_90": 180.41,
+        "return_pct": -0.64
       }
     ],
     "daily_cards": [
@@ -216,125 +216,125 @@
         "day_number": 1,
         "date": "2026-11-11",
         "day_label": "Wed Nov 11",
-        "predicted_open": 168.68,
-        "predicted_close": 168.29,
-        "expected_low_68": 164.85,
-        "expected_high_68": 172.02,
-        "cumulative_return_pct": -0.36,
-        "bullish_prob_pct": 43.4
+        "predicted_open": 168.91,
+        "predicted_close": 168.38,
+        "expected_low_68": 164.75,
+        "expected_high_68": 172.28,
+        "cumulative_return_pct": -0.3,
+        "bullish_prob_pct": 44.8
       },
       {
         "day_number": 2,
         "date": "2026-11-12",
         "day_label": "Thu Nov 12",
-        "predicted_open": 168.12,
-        "predicted_close": 167.98,
-        "expected_low_68": 163.02,
-        "expected_high_68": 172.87,
-        "cumulative_return_pct": -0.54,
-        "bullish_prob_pct": 42.5
+        "predicted_open": 168.25,
+        "predicted_close": 168.11,
+        "expected_low_68": 162.96,
+        "expected_high_68": 173.25,
+        "cumulative_return_pct": -0.46,
+        "bullish_prob_pct": 44.0
       },
       {
         "day_number": 3,
         "date": "2026-11-13",
         "day_label": "Fri Nov 13",
-        "predicted_open": 167.66,
-        "predicted_close": 167.43,
-        "expected_low_68": 161.97,
-        "expected_high_68": 173.45,
-        "cumulative_return_pct": -0.86,
-        "bullish_prob_pct": 40.8
+        "predicted_open": 167.85,
+        "predicted_close": 167.62,
+        "expected_low_68": 161.9,
+        "expected_high_68": 173.9,
+        "cumulative_return_pct": -0.75,
+        "bullish_prob_pct": 43.0
       },
       {
         "day_number": 4,
         "date": "2026-11-16",
         "day_label": "Mon Nov 16",
-        "predicted_open": 167.49,
-        "predicted_close": 167.45,
-        "expected_low_68": 161.1,
-        "expected_high_68": 173.79,
-        "cumulative_return_pct": -0.86,
-        "bullish_prob_pct": 40.9
+        "predicted_open": 167.75,
+        "predicted_close": 167.71,
+        "expected_low_68": 160.99,
+        "expected_high_68": 174.28,
+        "cumulative_return_pct": -0.7,
+        "bullish_prob_pct": 43.1
       },
       {
         "day_number": 5,
         "date": "2026-11-17",
         "day_label": "Tue Nov 17",
-        "predicted_open": 167.42,
-        "predicted_close": 167.46,
-        "expected_low_68": 160.44,
-        "expected_high_68": 174.42,
-        "cumulative_return_pct": -0.84,
-        "bullish_prob_pct": 42.1
+        "predicted_open": 167.64,
+        "predicted_close": 167.8,
+        "expected_low_68": 160.4,
+        "expected_high_68": 175.04,
+        "cumulative_return_pct": -0.64,
+        "bullish_prob_pct": 44.1
       }
     ]
   },
   "entry_recommendations": {
     "most_suitable_entry": {
       "label": "Most Suitable Entry Point (Optimal Profit)",
-      "entry_price": 166.43,
-      "discount_from_current_pct": -1.46,
-      "fill_probability_pct": 71.9,
+      "entry_price": 166.29,
+      "discount_from_current_pct": -1.54,
+      "fill_probability_pct": 69.8,
       "best_timing_window": "Intraday VWAP Retest Window (Day 1\u20132)",
-      "primary_target_price": 178.74,
-      "expected_gain_pct": 7.4,
-      "stretch_target_price": 186.65,
-      "stretch_gain_pct": 12.15,
-      "stop_loss_price": 156.32,
-      "max_risk_pct": 6.07,
+      "primary_target_price": 179.3,
+      "expected_gain_pct": 7.82,
+      "stretch_target_price": 187.66,
+      "stretch_gain_pct": 12.85,
+      "stop_loss_price": 155.61,
+      "max_risk_pct": 6.42,
       "reward_to_risk_ratio": 1.22,
-      "rationale": "Maximizes post-fill 1-week profit \u00d7 fill probability (72% chance of fill). Sits 1.46% below spot near support node $160.54 with a 1.22:1 post-fill Reward-to-Risk ratio toward $178.74."
+      "rationale": "Maximizes post-fill 1-week profit \u00d7 fill probability (70% chance of fill). Sits 1.54% below spot near support node $160.07 with a 1.22:1 post-fill Reward-to-Risk ratio toward $179.30."
     },
     "safest_entry": {
       "label": "Safest Entry Point (Maximum Margin of Safety)",
-      "entry_price": 160.52,
-      "discount_from_current_pct": -4.96,
-      "fill_probability_pct": 26.4,
+      "entry_price": 160.21,
+      "discount_from_current_pct": -5.14,
+      "fill_probability_pct": 25.6,
       "best_timing_window": "Volatility Shakeout / Limit Order Resting Bid (5-Day GTC)",
-      "conservative_target_price": 174.14,
-      "expected_gain_pct": 8.48,
-      "stop_loss_price": 152.17,
-      "max_drawdown_risk_pct": 5.2,
+      "conservative_target_price": 174.61,
+      "expected_gain_pct": 8.99,
+      "stop_loss_price": 151.38,
+      "max_drawdown_risk_pct": 5.51,
       "reward_to_risk_ratio": 1.63,
       "margin_of_safety_score": 65,
-      "rationale": "Anchored at the 20th-percentile simulated weekly floor and below-spot structural support ($161.42 / Support POC $160.54). Offers a 65% post-fill rebound probability with tight downside risk (5.20% to stop)."
+      "rationale": "Anchored at the 20th-percentile simulated weekly floor and below-spot structural support ($160.99 / Support POC $160.07). Offers a 65% post-fill rebound probability with tight downside risk (5.51% to stop)."
     },
     "execution_plan": {
-      "blended_average_entry": 165.36,
-      "blended_upside_to_primary_pct": 8.09,
+      "blended_average_entry": 165.2,
+      "blended_upside_to_primary_pct": 8.54,
       "resistances_to_watch": [
-        177.68,
-        180.56,
-        186.46
+        178.18,
+        187.47,
+        196.76
       ],
       "supports_to_watch": [
-        161.42,
-        160.54,
-        154.39
+        165.89,
+        160.99,
+        160.07
       ],
       "tranches": [
         {
           "tranche": "Tranche 1 \u2014 Tactical Starter (30%)",
           "allocation_pct": 30,
-          "limit_price": 167.78,
-          "discount_pct": -0.66,
-          "fill_probability_pct": 82.2,
+          "limit_price": 167.72,
+          "discount_pct": -0.69,
+          "fill_probability_pct": 80.8,
           "purpose": "Captures immediate upside if NVDA gaps & runs from Market Open with only a shallow dip."
         },
         {
           "tranche": "Tranche 2 \u2014 Most Suitable Core Entry (45%)",
           "allocation_pct": 45,
-          "limit_price": 166.43,
-          "discount_pct": -1.46,
-          "fill_probability_pct": 71.9,
+          "limit_price": 166.29,
+          "discount_pct": -1.54,
+          "fill_probability_pct": 69.8,
           "purpose": "Highest post-fill expected Reward-to-Risk entry aligned with Day 1\u20132 pullback zone."
         },
         {
           "tranche": "Tranche 3 \u2014 Safest Institutional Floor (25%)",
           "allocation_pct": 25,
-          "limit_price": 160.52,
-          "discount_pct": -4.96,
-          "fill_probability_pct": 26.4,
+          "limit_price": 160.21,
+          "discount_pct": -5.14,
+          "fill_probability_pct": 25.6,
           "purpose": "High margin-of-safety bid sitting at deep institutional support / 20th-percentile weekly low."
         }
       ]
@@ -343,7 +343,7 @@
   "database_status": {
     "db_file": "nvda_tracker.db",
     "db_path": "data/nvda_tracker.db",
-    "db_size_kb": 1592.0,
+    "db_size_kb": 1596.0,
     "last_updated_at": "2026-11-08T14:02:34.716255+00:00",
     "history_window": "5Y (5-Year Walk-Forward Run \u00b7 2021\u20132026)",
     "date_range": {
@@ -377,13 +377,13 @@
         "rows": 2
       },
       "whale_events": {
-        "rows": 57
+        "rows": 60
       },
       "price_snapshots": {
-        "rows": 41
+        "rows": 42
       },
       "factor_snapshots": {
-        "rows": 41
+        "rows": 42
       }
     },
     "change_delta": {
@@ -400,7 +400,7 @@
       "prev_samples_evaluated": 89,
       "new_samples_evaluated": 2464,
       "prev_db_size_kb": 112.0,
-      "new_db_size_kb": 1592.0
+      "new_db_size_kb": 1596.0
     },
     "latest_5y_audit": {
       "id": 2,

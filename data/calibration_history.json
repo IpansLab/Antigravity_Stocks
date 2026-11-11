@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-11T01:15:01.562217+00:00",
+  "updated_at": "2026-11-11T08:58:20.763301+00:00",
   "current_calibration_state": {
     "id": 325,
     "updated_at": "2026-11-11T01:15:00.206274+00:00",
@@ -26,7 +26,7 @@
   "database_status": {
     "db_file": "nvda_tracker.db",
     "db_path": "data/nvda_tracker.db",
-    "db_size_kb": 1592.0,
+    "db_size_kb": 1596.0,
     "last_updated_at": "2026-11-08T14:02:34.716255+00:00",
     "history_window": "5Y (5-Year Walk-Forward Run \u00b7 2021\u20132026)",
     "date_range": {
@@ -60,13 +60,13 @@
         "rows": 2
       },
       "whale_events": {
-        "rows": 57
+        "rows": 60
       },
       "price_snapshots": {
-        "rows": 41
+        "rows": 42
       },
       "factor_snapshots": {
-        "rows": 41
+        "rows": 42
       }
     },
     "change_delta": {
@@ -83,7 +83,7 @@
       "prev_samples_evaluated": 89,
       "new_samples_evaluated": 2464,
       "prev_db_size_kb": 112.0,
-      "new_db_size_kb": 1592.0
+      "new_db_size_kb": 1596.0
     },
     "latest_5y_audit": {
       "id": 2,
