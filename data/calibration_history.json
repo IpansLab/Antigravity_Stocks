@@ -1,89 +1,89 @@
 {
-  "updated_at": "2026-11-20T09:47:37.795431+00:00",
+  "updated_at": "2026-11-20T21:12:13.359191+00:00",
   "current_calibration_state": {
-    "id": 335,
-    "updated_at": "2026-11-19T21:39:15.983813+00:00",
+    "id": 336,
+    "updated_at": "2026-11-20T21:12:12.579631+00:00",
     "step_type": "LIVE_ERROR_FINE_TUNE",
-    "bias_drift": -0.002028,
+    "bias_drift": -0.0035,
     "vol_multiplier": 0.8435,
     "learning_rate": 0.045,
-    "rolling_mae": 4.77,
-    "rolling_mape": 2.52,
-    "directional_accuracy": 57.6,
-    "baseline_mae": 4.96,
-    "samples_evaluated": 2478,
-    "notes": "Causal live fine-tune (2 newly resolved predictions, residual -3.11%): updated weights & bounded drift bias (-0.203%).",
+    "rolling_mae": 5.37,
+    "rolling_mape": 3.01,
+    "directional_accuracy": 57.7,
+    "baseline_mae": 5.6,
+    "samples_evaluated": 2480,
+    "notes": "Causal live fine-tune (2 newly resolved predictions, residual -13.06%): updated weights & bounded drift bias (-0.350%).",
     "q68_conformal": 0.9482,
     "q95_conformal": 1.9554,
     "weights": {
-      "whale_institutional": 0.4407,
-      "overnight_premarket": 0.1662,
-      "sector_peers": 0.0824,
-      "macro_regime": 0.1878,
-      "technical_sentiment": 0.1228
+      "whale_institutional": 0.4288,
+      "overnight_premarket": 0.1672,
+      "sector_peers": 0.0925,
+      "macro_regime": 0.188,
+      "technical_sentiment": 0.1234
     }
   },
   "database_status": {
     "db_file": "nvda_tracker.db",
     "db_path": "data/nvda_tracker.db",
-    "db_size_kb": 1632.0,
+    "db_size_kb": 1640.0,
     "last_updated_at": "2026-11-08T14:02:34.716255+00:00",
     "history_window": "5Y (5-Year Walk-Forward Run \u00b7 2021\u20132026)",
     "date_range": {
       "start": "2021-11-08",
-      "end": "2026-11-19",
-      "trading_days": 1264,
+      "end": "2026-11-20",
+      "trading_days": 1265,
       "min_close_price": 11.23,
       "max_close_price": 239.24
     },
     "table_counts": {
       "historical_daily_prices": {
-        "rows": 1264,
+        "rows": 1265,
         "start_date": "2021-11-08",
-        "end_date": "2026-11-19"
-      },
-      "predictions": {
-        "rows": 2485,
-        "backtest_5y_rows": 2460,
-        "live_rows": 25,
-        "resolved_rows": 2483,
-        "calibrated_rows": 2483,
-        "start_date": "2021-12-14",
         "end_date": "2026-11-20"
       },
+      "predictions": {
+        "rows": 2487,
+        "backtest_5y_rows": 2460,
+        "live_rows": 27,
+        "resolved_rows": 2485,
+        "calibrated_rows": 2485,
+        "start_date": "2021-12-14",
+        "end_date": "2026-11-23"
+      },
       "model_calibration_state": {
-        "rows": 176,
+        "rows": 177,
         "latest_step_type": "LIVE_ERROR_FINE_TUNE",
-        "samples_evaluated": 2478
+        "samples_evaluated": 2480
       },
       "backtest_runs_audit": {
         "rows": 2
       },
       "whale_events": {
-        "rows": 164
+        "rows": 172
       },
       "price_snapshots": {
-        "rows": 63
+        "rows": 64
       },
       "factor_snapshots": {
-        "rows": 63
+        "rows": 64
       }
     },
     "change_delta": {
       "prev_history_window": "1Y Fetch / 40-Day Backtest (2026-09-11 to 2026-11-06)",
-      "new_history_window": "5Y Full Walk-Forward (2021-11-08 to 2026-11-19)",
+      "new_history_window": "5Y Full Walk-Forward (2021-11-08 to 2026-11-20)",
       "prev_daily_bars_stored": 0,
-      "new_daily_bars_stored": 1264,
+      "new_daily_bars_stored": 1265,
       "prev_predictions_count": 90,
-      "new_predictions_count": 2485,
-      "predictions_added": 2395,
+      "new_predictions_count": 2487,
+      "predictions_added": 2397,
       "prev_calibration_count": 13,
-      "new_calibration_count": 176,
-      "calibration_checkpoints_added": 163,
+      "new_calibration_count": 177,
+      "calibration_checkpoints_added": 164,
       "prev_samples_evaluated": 89,
-      "new_samples_evaluated": 2478,
+      "new_samples_evaluated": 2480,
       "prev_db_size_kb": 112.0,
-      "new_db_size_kb": 1632.0
+      "new_db_size_kb": 1640.0
     },
     "latest_5y_audit": {
       "id": 2,
@@ -226,29 +226,6 @@
         "sector_peers": 0.2,
         "macro_regime": 0.12,
         "technical_sentiment": 0.15
-      }
-    },
-    {
-      "id": 171,
-      "updated_at": "2022-01-14T00:00:00-05:00",
-      "step_type": "WARM_START_WALK_FORWARD",
-      "bias_drift": -0.001742,
-      "vol_multiplier": 0.9545,
-      "learning_rate": 0.045,
-      "rolling_mae": 0.83,
-      "rolling_mape": 2.92,
-      "directional_accuracy": 52.1,
-      "baseline_mae": 0.75,
-      "samples_evaluated": 48,
-      "notes": "5Y walk-forward through 2022-01-18: 30D MAE $0.83 (vs RW baseline $0.75), 5Y OOS MAPE 2.92%, Hit Rate 52.1%.",
-      "q68_conformal": 0.9383,
-      "q95_conformal": 1.8911,
-      "weights": {
-        "whale_institutional": 0.2971,
-        "overnight_premarket": 0.2457,
-        "sector_peers": 0.1881,
-        "macro_regime": 0.1135,
-        "technical_sentiment": 0.1556
       }
     },
     {
@@ -4022,23 +3999,32 @@
         "macro_regime": 0.1878,
         "technical_sentiment": 0.1228
       }
+    },
+    {
+      "id": 336,
+      "updated_at": "2026-11-20T21:12:12.579631+00:00",
+      "step_type": "LIVE_ERROR_FINE_TUNE",
+      "bias_drift": -0.0035,
+      "vol_multiplier": 0.8435,
+      "learning_rate": 0.045,
+      "rolling_mae": 5.37,
+      "rolling_mape": 3.01,
+      "directional_accuracy": 57.7,
+      "baseline_mae": 5.6,
+      "samples_evaluated": 2480,
+      "notes": "Causal live fine-tune (2 newly resolved predictions, residual -13.06%): updated weights & bounded drift bias (-0.350%).",
+      "q68_conformal": 0.9482,
+      "q95_conformal": 1.9554,
+      "weights": {
+        "whale_institutional": 0.4288,
+        "overnight_premarket": 0.1672,
+        "sector_peers": 0.0925,
+        "macro_regime": 0.188,
+        "technical_sentiment": 0.1234
+      }
     }
   ],
   "recent_predictions_vs_actuals": [
-    {
-      "date": "2026-08-27",
-      "horizon": "DAILY_CLOSE",
-      "base_price": 209.66,
-      "predicted_price": 207.69,
-      "actual_price": 227.98,
-      "low_68": 203.14,
-      "high_68": 212.35,
-      "low_95": 197.93,
-      "high_95": 217.93,
-      "abs_error": 20.29,
-      "pct_error": 8.9,
-      "direction_correct": false
-    },
     {
       "date": "2026-08-28",
       "horizon": "DAILY_CLOSE",
@@ -4863,6 +4849,20 @@
       "high_95": 158.05,
       "abs_error": 4.69,
       "pct_error": 3.21,
+      "direction_correct": true
+    },
+    {
+      "date": "2026-11-20",
+      "horizon": "DAILY_CLOSE",
+      "base_price": 145.98,
+      "predicted_price": 144.59,
+      "actual_price": 125.53,
+      "low_68": 141.28,
+      "high_68": 147.99,
+      "low_95": 137.84,
+      "high_95": 151.68,
+      "abs_error": 19.06,
+      "pct_error": 15.18,
       "direction_correct": true
     }
   ]
