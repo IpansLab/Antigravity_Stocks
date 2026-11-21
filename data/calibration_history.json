@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-21T02:14:27.450545+00:00",
+  "updated_at": "2026-11-21T09:19:46.844192+00:00",
   "current_calibration_state": {
     "id": 336,
     "updated_at": "2026-11-20T21:12:12.579631+00:00",
@@ -60,13 +60,13 @@
         "rows": 2
       },
       "whale_events": {
-        "rows": 179
+        "rows": 185
       },
       "price_snapshots": {
-        "rows": 65
+        "rows": 66
       },
       "factor_snapshots": {
-        "rows": 65
+        "rows": 66
       }
     },
     "change_delta": {
