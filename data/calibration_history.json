@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-26T03:34:38.423085+00:00",
+  "updated_at": "2026-11-26T10:33:49.026790+00:00",
   "current_calibration_state": {
     "id": 339,
     "updated_at": "2026-11-25T22:36:07.593480+00:00",
@@ -63,10 +63,10 @@
         "rows": 218
       },
       "price_snapshots": {
-        "rows": 74
+        "rows": 75
       },
       "factor_snapshots": {
-        "rows": 74
+        "rows": 75
       }
     },
     "change_delta": {
